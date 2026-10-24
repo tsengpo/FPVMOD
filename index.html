@@ -1,0 +1,2434 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>FPV 戰術自殺無人機模擬器 (Analog FPV Kamikaze Simulator)</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Noto+Sans+TC:wght@400;600;700&display=swap');
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #050706;
+      font-family: 'Share Tech Mono', 'Noto Sans TC', monospace;
+      color: #d8f8d8;
+    }
+
+    /* Analog CRT Scanlines & Vignette */
+    .crt-scanlines {
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%,
+        rgba(0, 0, 0, 0.44) 50%
+      ), linear-gradient(
+        90deg,
+        rgba(255, 0, 0, 0.045),
+        rgba(0, 255, 0, 0.015),
+        rgba(0, 0, 255, 0.045)
+      );
+      background-size: 100% 4px, 6px 100%;
+      pointer-events: none;
+    }
+
+    .crt-vignette {
+      box-shadow: inset 0 0 110px rgba(0, 0, 0, 0.9), inset 0 0 30px rgba(0, 255, 80, 0.06);
+      pointer-events: none;
+    }
+
+    .osd-text {
+      text-shadow: 2px 2px 0px #000, -1px -1px 0px #000, 1px -1px 0px #000, -1px 1px 0px #000;
+      letter-spacing: 0.06em;
+    }
+
+    .osd-warn {
+      text-shadow: 2px 2px 0px #000, -1px -1px 0px #000, 0px 0px 10px rgba(239, 68, 68, 0.85);
+    }
+
+    /* Standard FPV RC Radio Transmitter Hall-Sensor Gimbal Assembly */
+    .gimbal-housing {
+      touch-action: none;
+      background: linear-gradient(145deg, rgba(38, 42, 46, 0.86), rgba(16, 18, 20, 0.92));
+      border: 2px solid rgba(120, 130, 140, 0.55);
+      border-radius: 18px;
+      box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.85),
+        inset 0 1px 2px rgba(255, 255, 255, 0.18),
+        inset 0 -3px 8px rgba(0, 0, 0, 0.9);
+      padding: 10px;
+    }
+
+    .gimbal-screw {
+      width: 6px;
+      height: 6px;
+      border-radius: 9999px;
+      background: radial-gradient(circle at 30% 30%, #9ca3af, #374151);
+      border: 1px solid #111827;
+      box-shadow: inset 0 1px 1px rgba(0,0,0,0.8);
+      pointer-events: none;
+    }
+
+    .stick-pad {
+      touch-action: none;
+      background:
+        radial-gradient(circle at center, rgba(18, 22, 26, 0.85) 0%, rgba(8, 10, 12, 0.96) 68%, rgba(30, 35, 40, 0.95) 100%);
+      border: 3px solid rgba(82, 92, 105, 0.75);
+      border-radius: 9999px;
+      box-shadow:
+        inset 0 6px 18px rgba(0, 0, 0, 0.95),
+        inset 0 0 0 2px rgba(20, 24, 28, 0.9),
+        0 1px 3px rgba(255, 255, 255, 0.12);
+    }
+
+    /* Throttle Ratchet & Tension Track */
+    .gimbal-ratchet-track {
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.28) 0px,
+        rgba(255, 255, 255, 0.28) 1.5px,
+        transparent 1.5px,
+        transparent 5px
+      );
+      pointer-events: none;
+    }
+
+    /* Center Pivot Ball Socket */
+    .gimbal-pivot-socket {
+      width: 26px;
+      height: 26px;
+      border-radius: 9999px;
+      background: radial-gradient(circle at 40% 40%, #4b5563 0%, #1f2937 55%, #090b0e 100%);
+      border: 1.5px solid rgba(156, 163, 175, 0.35);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+      pointer-events: none;
+    }
+
+    /* CNC Anodized Knurled Stick End Crown */
+    .stick-knob {
+      width: 44px;
+      height: 44px;
+      border-radius: 9999px;
+      background:
+        radial-gradient(circle at center, #1f2937 0%, #111827 34%, transparent 35%),
+        conic-gradient(
+          from 0deg,
+          #e5e7eb 0deg 15deg, #4b5563 15deg 30deg,
+          #e5e7eb 30deg 45deg, #4b5563 45deg 60deg,
+          #e5e7eb 60deg 75deg, #4b5563 75deg 90deg,
+          #e5e7eb 90deg 105deg, #4b5563 105deg 120deg,
+          #e5e7eb 120deg 135deg, #4b5563 135deg 150deg,
+          #e5e7eb 150deg 165deg, #4b5563 165deg 180deg,
+          #e5e7eb 180deg 195deg, #4b5563 195deg 210deg,
+          #e5e7eb 210deg 225deg, #4b5563 225deg 240deg,
+          #e5e7eb 240deg 255deg, #4b5563 255deg 270deg,
+          #e5e7eb 270deg 285deg, #4b5563 285deg 300deg,
+          #e5e7eb 300deg 315deg, #4b5563 315deg 330deg,
+          #e5e7eb 330deg 345deg, #4b5563 345deg 360deg
+        );
+      border: 2.5px solid #d97706;
+      box-shadow:
+        0 6px 14px rgba(0, 0, 0, 0.9),
+        inset 0 0 5px rgba(255, 255, 255, 0.55);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .stick-knob::after {
+      content: '';
+      position: absolute;
+      inset: 8px;
+      border-radius: 9999px;
+      background: radial-gradient(circle at 35% 35%, #f59e0b, #b45309 70%, #451a03 100%);
+      border: 1.5px solid rgba(254, 243, 199, 0.75);
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.65);
+    }
+
+    @keyframes blink-fast {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0.15; }
+    }
+
+    .blink-alert {
+      animation: blink-fast 0.45s infinite;
+    }
+  </style>
+</head>
+<body class="relative w-full h-full overflow-hidden select-none">
+
+  <!-- 3D WebGL Viewport -->
+  <canvas id="simCanvas" class="block w-full h-full"></canvas>
+
+  <!-- FPV Warhead & Whisker Trigger Overlay (2D Canvas) -->
+  <canvas id="fpvRigCanvas" class="fixed inset-0 w-full h-full pointer-events-none z-10"></canvas>
+
+  <!-- Analog VTX Noise & Glitch Overlay (2D Canvas) -->
+  <canvas id="noiseCanvas" class="fixed inset-0 w-full h-full pointer-events-none z-20"></canvas>
+
+  <!-- Scanlines and CRT Vignette -->
+  <div class="fixed inset-0 crt-scanlines crt-vignette z-20"></div>
+
+  <!-- =================================================================== -->
+  <!-- IN-FLIGHT FULLSCREEN GOGGLE OSD + DUAL JOYSTICKS ONLY (NO TOOLBARS) -->
+  <!-- =================================================================== -->
+  <div id="osdLayer" class="fixed inset-0 pointer-events-none z-20 hidden flex-col justify-between p-4 sm:p-6 text-sm md:text-base osd-text">
+    <!-- Upper Analog OSD Telemetry Row -->
+    <div class="flex justify-between items-start">
+      <div class="space-y-0.5">
+        <div class="flex items-center gap-3">
+          <span id="osdBatteryCell" class="font-bold text-white">25.2V (4.20V)</span>
+          <span id="osdAmps" class="text-zinc-200">00.0A</span>
+          <span id="osdMah" class="text-zinc-300">0000mAh</span>
+        </div>
+        <div class="flex items-center gap-3 text-xs text-zinc-200">
+          <span id="osdVtxChannel">R:4:5769</span>
+          <span id="osdRssi">RSSI: 99%</span>
+          <span id="osdLinkQuality">LQ: 9:100</span>
+          <span id="osdScoreBadge" class="text-amber-300">KILLS: 0/18</span>
+        </div>
+        <div id="osdTargetLock" class="text-xs text-emerald-300">
+          TGT: STANDBY ON PAD
+        </div>
+      </div>
+
+      <!-- Compass Tape -->
+      <div class="hidden sm:flex flex-col items-center">
+        <div class="px-3 py-0.5 text-xs tracking-widest text-white" id="osdCompass">
+          --- [ N 000° ] ---
+        </div>
+        <div id="osdMissionFeed" class="mt-0.5 text-[11px] text-zinc-300">
+          GROUND PAD READY // PUSH THROTTLE TO LAUNCH (ESC: 設定)
+        </div>
+      </div>
+
+      <!-- Right Telemetry -->
+      <div class="text-right space-y-0.5">
+        <div id="osdAlt" class="font-bold text-white">ALT: 000.0 m</div>
+        <div id="osdSpeed" class="text-zinc-100">SPD: 000 km/h</div>
+        <div id="osdDist" class="text-xs text-zinc-300">HOME: 000 m</div>
+        <div id="osdThrottlePct" class="text-xs text-amber-300">THR: 00%</div>
+      </div>
+    </div>
+
+    <!-- Center Analog Crosshair & Artificial Horizon -->
+    <div class="relative flex items-center justify-center my-auto">
+      <div id="osdHorizonWrap" class="relative w-52 h-52 flex items-center justify-center">
+        <div id="osdHorizonBar" class="w-36 h-0.5 bg-white/75 relative transition-transform duration-75">
+          <div class="absolute -left-2 -top-2 w-2.5 h-3.5 border-l-2 border-t-2 border-white/80"></div>
+          <div class="absolute -right-2 -top-2 w-2.5 h-3.5 border-r-2 border-t-2 border-white/80"></div>
+        </div>
+        <div class="absolute flex items-center justify-center">
+          <div class="w-5 h-0.5 bg-white/85"></div>
+          <div class="w-2.5 h-2.5 rounded-full border-2 border-red-400 mx-1"></div>
+          <div class="w-5 h-0.5 bg-white/85"></div>
+        </div>
+      </div>
+
+      <div id="osdCenterWarning" class="absolute -bottom-8 px-3 py-0.5 text-red-400 font-bold tracking-widest text-sm md:text-base osd-warn hidden">
+        ** PULL UP // LOW ALTITUDE **
+      </div>
+    </div>
+
+    <!-- Bottom Dual RC Transmitter Hall-Effect Gimbals + Minimal OSD Line -->
+    <div class="flex items-end justify-between w-full pointer-events-auto">
+      <!-- Left RC Transmitter Gimbal -->
+      <div class="gimbal-housing relative">
+        <div class="gimbal-screw absolute top-2 left-2"></div>
+        <div class="gimbal-screw absolute top-2 right-2"></div>
+        <div class="gimbal-screw absolute bottom-2 left-2"></div>
+        <div class="gimbal-screw absolute bottom-2 right-2"></div>
+        <div id="leftStickPad" class="stick-pad relative w-36 h-36 sm:w-44 sm:h-44 cursor-pointer overflow-hidden">
+          <!-- Concentric calibration rings & axis ticks -->
+          <div class="absolute inset-4 rounded-full border border-white/10 pointer-events-none"></div>
+          <div class="absolute inset-9 rounded-full border border-dashed border-white/15 pointer-events-none"></div>
+          <div class="gimbal-ratchet-track absolute inset-y-3 left-1/2 -translate-x-1/2 w-3 opacity-80"></div>
+          <div class="absolute inset-x-3 top-1/2 h-px bg-white/20 pointer-events-none"></div>
+          <div class="absolute inset-y-3 left-1/2 w-px bg-white/25 pointer-events-none"></div>
+          <!-- Center Ball Pivot & 3D Metallic Shaft Line -->
+          <div class="gimbal-pivot-socket absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+          <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
+            <line id="leftStickRod" x1="50" y1="50" x2="50" y2="88" stroke="#cbd5e1" stroke-width="4.5" stroke-linecap="round" />
+            <line id="leftStickRodHighlight" x1="50" y1="50" x2="50" y2="88" stroke="#f8fafc" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+          <div id="leftStickAxisLabels" class="absolute inset-2 flex flex-col justify-between items-center text-[10px] text-amber-200/75 font-bold pointer-events-none">
+            <span>THR+</span>
+            <div class="w-full flex justify-between px-1.5">
+              <span>YAW-</span>
+              <span>YAW+</span>
+            </div>
+            <span>THR-</span>
+          </div>
+          <div id="leftStickKnob" class="stick-knob absolute left-1/2 top-1/2"></div>
+        </div>
+      </div>
+
+      <!-- Minimal OSD Status Line at Bottom Center (No Extra Buttons) -->
+      <div class="flex flex-col items-center text-center pb-1 px-2 pointer-events-none">
+        <div id="osdCraftMode" class="text-xs sm:text-sm font-bold text-amber-300">
+          [ANGLE] ARMED // MODE 2
+        </div>
+        <div id="osdTimer" class="text-[11px] text-zinc-300">
+          00:00 // [SPACE] 引爆  [R] 新機  [ESC] 選單
+        </div>
+      </div>
+
+      <!-- Right RC Transmitter Gimbal -->
+      <div class="gimbal-housing relative">
+        <div class="gimbal-screw absolute top-2 left-2"></div>
+        <div class="gimbal-screw absolute top-2 right-2"></div>
+        <div class="gimbal-screw absolute bottom-2 left-2"></div>
+        <div class="gimbal-screw absolute bottom-2 right-2"></div>
+        <div id="rightStickPad" class="stick-pad relative w-36 h-36 sm:w-44 sm:h-44 cursor-pointer overflow-hidden">
+          <div class="absolute inset-4 rounded-full border border-white/10 pointer-events-none"></div>
+          <div class="absolute inset-9 rounded-full border border-dashed border-white/15 pointer-events-none"></div>
+          <div class="gimbal-ratchet-track absolute inset-y-3 left-1/2 -translate-x-1/2 w-3 opacity-80"></div>
+          <div class="absolute inset-x-3 top-1/2 h-px bg-white/20 pointer-events-none"></div>
+          <div class="absolute inset-y-3 left-1/2 w-px bg-white/25 pointer-events-none"></div>
+          <div class="gimbal-pivot-socket absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+          <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
+            <line id="rightStickRod" x1="50" y1="50" x2="50" y2="50" stroke="#cbd5e1" stroke-width="4.5" stroke-linecap="round" />
+            <line id="rightStickRodHighlight" x1="50" y1="50" x2="50" y2="50" stroke="#f8fafc" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+          <div id="rightStickAxisLabels" class="absolute inset-2 flex flex-col justify-between items-center text-[10px] text-amber-200/75 font-bold pointer-events-none">
+            <span>PITCH↓</span>
+            <div class="w-full flex justify-between px-1.5">
+              <span>ROLL-</span>
+              <span>ROLL+</span>
+            </div>
+            <span>PITCH↑</span>
+          </div>
+          <div id="rightStickKnob" class="stick-knob absolute left-1/2 top-1/2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================================================================== -->
+  <!-- PRE-FLIGHT START MENU (CONFIGURE OPTIONS BEFORE ENTERING BATTLEFIELD)-->
+  <!-- =================================================================== -->
+  <div id="startScreenModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+    <div class="max-w-2xl w-full bg-zinc-950/95 border-2 border-emerald-500/60 rounded-2xl p-5 sm:p-6 shadow-2xl space-y-5 my-auto">
+      <!-- Title Header -->
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="text-xs text-emerald-400 tracking-widest font-bold">5.8GHz ANALOG FPV LOITERING MUNITION</span>
+          </div>
+          <h1 class="text-xl sm:text-2xl font-bold text-white mt-0.5">FPV 戰術自殺無人機模擬器 — 起飛前整備選單</h1>
+        </div>
+        <span id="menuScoreBadge" class="px-3 py-1 rounded-lg bg-emerald-950 border border-emerald-500/50 text-emerald-300 text-xs font-bold">
+          目前戰果: 0 / 18 擊毀
+        </span>
+      </div>
+
+      <!-- Configuration Grid -->
+      <div class="grid sm:grid-cols-2 gap-3.5 text-xs sm:text-sm">
+        <!-- 1. Joystick Mode Selection (US Mode 2 vs JP Mode 1) -->
+        <div class="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2">
+          <div class="text-emerald-300 font-bold flex items-center justify-between">
+            <span>1. 飛行搖桿模式 (Stick Mode)</span>
+            <span id="leftStickTitle" class="text-[11px] text-zinc-400">美國手 Mode 2</span>
+          </div>
+          <button id="btnStickMode" type="button" class="w-full py-2 px-3 rounded-lg bg-emerald-900/75 hover:bg-emerald-800 border border-emerald-400/60 text-white font-bold text-left flex items-center justify-between transition">
+            <span id="stickModeBtnText">美國手 (Mode 2)</span>
+            <span class="text-[11px] text-emerald-200">點擊切換 ⇄</span>
+          </button>
+          <p id="rightStickTitle" class="text-[11px] text-zinc-400 leading-relaxed">
+            左搖桿：油門升降(不回中) + 偏航 / 右搖桿：俯仰 + 橫滾
+          </p>
+        </div>
+
+        <!-- 2. Flight Controller Mode (ACRO vs ANGLE) -->
+        <div class="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2">
+          <div class="text-amber-300 font-bold flex items-center justify-between">
+            <span>2. 飛控動態模式 (Flight Mode)</span>
+            <span class="text-[11px] text-zinc-400">真實角速度/自穩</span>
+          </div>
+          <button id="btnFlightMode" type="button" class="w-full py-2 px-3 rounded-lg bg-amber-900/70 hover:bg-amber-800 border border-amber-400/60 text-white font-bold text-left flex items-center justify-between transition">
+            <span id="flightModeBtnText">ANGLE (水平自穩模式)</span>
+            <span class="text-[11px] text-amber-200">點擊切換 ⇄</span>
+          </button>
+          <p id="flightModeDesc" class="text-[11px] text-zinc-400 leading-relaxed">
+            鬆開俯仰/橫滾搖桿時自動恢復水平，適合穩定飛行與精準瞄準。
+          </p>
+        </div>
+
+        <!-- 3. Nose Warhead & Whisker Trigger Overlay -->
+        <div class="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2">
+          <div class="text-zinc-200 font-bold">3. 機頭彈頭與引爆銅線顯示</div>
+          <button id="btnPayloadView" type="button" class="w-full py-2 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-100 font-semibold text-left flex items-center justify-between transition">
+            <span id="payloadViewBtnText">PG-7V RPG 彈頭 + 觸發銅線</span>
+            <span class="text-[11px] text-zinc-400">切換 ⇄</span>
+          </button>
+          <p class="text-[11px] text-zinc-400">
+            可切換顯示 RPG 破甲彈頭、僅顯示前端短路銅線或全淨空畫面。
+          </p>
+        </div>
+
+        <!-- 4. FPV Camera Uptilt Angle -->
+        <div class="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2">
+          <div class="text-zinc-200 font-bold">4. FPV 鏡頭仰角 (Camera Tilt)</div>
+          <div class="flex gap-1.5">
+            <button id="btnCamTilt" type="button" class="flex-1 py-2 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-100 font-semibold transition">
+              仰角: 20° (標準)
+            </button>
+            <button id="btnCamPresetLow" type="button" class="py-2 px-2.5 rounded-lg bg-zinc-800 hover:bg-emerald-950 border border-zinc-600 text-emerald-300 text-xs transition">
+              15° 低空
+            </button>
+            <button id="btnCamPresetDive" type="button" class="py-2 px-2.5 rounded-lg bg-zinc-800 hover:bg-emerald-950 border border-zinc-600 text-amber-300 text-xs transition">
+              35° 衝刺
+            </button>
+          </div>
+          <p class="text-[11px] text-zinc-400">
+            仰角越大，高速前飛時視線越水平。
+          </p>
+        </div>
+
+        <!-- 5. Analog Color / Night Phosphor & Audio -->
+        <div class="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2">
+          <div class="text-zinc-200 font-bold">5. 類比圖傳色彩與音效</div>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="btnNightThermal" type="button" class="py-2 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-100 text-xs font-semibold transition">
+              色彩: 彩色類比
+            </button>
+            <button id="btnAudioToggle" type="button" class="py-2 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-100 text-xs font-semibold transition">
+              音效: 開啟
+            </button>
+          </div>
+        </div>
+
+        <!-- 6. Warhead Arming & Manual Controls Info -->
+        <div class="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2">
+          <div class="text-zinc-200 font-bold">6. 彈頭引信保險與熱鍵</div>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="btnArmToggle" type="button" class="py-2 px-2.5 rounded-lg bg-red-900/80 hover:bg-red-800 border border-red-400/60 text-red-100 text-xs font-bold transition">
+              引信: ARMED (備炸)
+            </button>
+            <button id="btnHelpModal" type="button" class="py-2 px-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-emerald-300 text-xs font-bold transition">
+              搖桿操作說明
+            </button>
+          </div>
+          <p class="text-[11px] text-zinc-400">
+            飛行中按 <kbd class="px-1 bg-black rounded border border-zinc-700">ESC</kbd> 可隨時返回此設定頁。
+          </p>
+        </div>
+      </div>
+
+      <!-- Action Launch Buttons -->
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-800">
+        <div class="flex items-center gap-2">
+          <button id="btnResetBattlefield" type="button" class="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 text-xs sm:text-sm font-semibold transition">
+            重置戰場所有目標
+          </button>
+          <button id="btnRespawn" type="button" class="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-sky-300 text-xs sm:text-sm font-semibold transition">
+            機體歸位發射台
+          </button>
+          <!-- Hidden compatibility button for manual detonation trigger -->
+          <button id="btnDetonateNow" type="button" class="hidden">立即引爆</button>
+        </div>
+
+        <button id="btnLaunchBattlefield" type="button" class="flex-1 sm:flex-initial px-8 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-base tracking-wider shadow-lg shadow-emerald-900/50 transition">
+          進入戰場起飛 (LAUNCH) ▶
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Post-Impact Static / 3rd-Person Orbit BDA Overlay Banner -->
+  <div id="detonationBanner" class="fixed inset-0 z-30 hidden flex-col items-center justify-end pb-6 bg-transparent pointer-events-none px-4">
+    <div id="detonationCard" class="pointer-events-auto max-w-md w-full bg-zinc-950/90 border-2 border-red-500/80 rounded-xl p-4 text-center shadow-2xl backdrop-blur-sm">
+      <div id="detonationSubHeader" class="text-xs tracking-widest text-red-400 font-bold mb-1">5.8GHz VTX CARRIER LOST</div>
+      <h2 id="detonationHeadline" class="text-2xl font-bold text-white mb-2">目標命中 // 訊號中斷</h2>
+      <p id="detonationDetail" class="text-sm text-emerald-300 mb-4">
+        PG-7V 破甲彈頭已引爆
+      </p>
+      <div id="detonationStats" class="grid grid-cols-2 gap-2 text-xs bg-black/60 p-3 rounded border border-zinc-800 mb-4 text-left">
+        <div>命中速度: <span id="statImpactSpeed" class="text-amber-300 font-bold">0 km/h</span></div>
+        <div>擊毀戰果: <span id="statKillsRun" class="text-emerald-300 font-bold">0 目標</span></div>
+        <div>撞擊座標: <span id="statImpactCoords" class="text-zinc-300">0, 0</span></div>
+        <div>戰場剩餘: <span id="statRemainingTargets" class="text-zinc-300">18 目標</span></div>
+      </div>
+      <div class="flex flex-wrap items-center justify-center gap-2.5">
+        <button id="btnBannerRespawn" type="button" class="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm transition">
+          發射台部署新機 [R]
+        </button>
+        <button id="btnBannerBackMenu" type="button" class="px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-emerald-300 text-sm border border-emerald-500/40 transition">
+          返回整備選單 [ESC]
+        </button>
+        <button id="btnBannerResetAll" type="button" class="px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs border border-zinc-700 transition">
+          重置戰場
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help & Controls Modal -->
+  <div id="helpModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/85 p-4">
+    <div class="max-w-xl w-full bg-zinc-950 border border-emerald-500/50 rounded-xl p-5 text-xs sm:text-sm text-zinc-200 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+        <h3 class="text-base sm:text-lg font-bold text-emerald-300">FPV 自殺無人機戰術操作手冊</h3>
+        <button id="btnCloseHelp" type="button" class="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300">關閉</button>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div class="p-3 rounded-lg bg-zinc-900/90 border border-emerald-500/30">
+          <div class="font-bold text-emerald-300 mb-1">美國手 (Mode 2 - 預設)</div>
+          <ul class="space-y-1 text-xs text-zinc-300">
+            <li>• <b>左搖桿 (W/S, A/D)</b>：油門升降 (Throttle) + 左右偏航 (Yaw)</li>
+            <li>• <b>右搖桿 (↑/↓, ←/→)</b>：前後俯仰 (Pitch) + 左右橫滾 (Roll)</li>
+            <li>• 起飛方式：從地面發射架推高左搖桿油門即可離地升空。</li>
+          </ul>
+        </div>
+        <div class="p-3 rounded-lg bg-zinc-900/90 border border-amber-500/30">
+          <div class="font-bold text-amber-300 mb-1">日本手 (Mode 1)</div>
+          <ul class="space-y-1 text-xs text-zinc-300">
+            <li>• <b>左搖桿 (W/S, A/D)</b>：前後俯仰 (Pitch) + 左右偏航 (Yaw)</li>
+            <li>• <b>右搖桿 (↑/↓, ←/→)</b>：油門升降 (Throttle) + 左右橫滾 (Roll)</li>
+            <li>• 起飛方式：從地面發射架推高右搖桿油門即可離地升空。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="space-y-2 text-xs text-zinc-300 bg-zinc-900/60 p-3 rounded-lg border border-zinc-800">
+        <div class="font-bold text-white">真實地面起飛與戰術飛行提示：</div>
+        <p>• <b>地面發射架起飛</b>：無人機初始停放於前線掩體發射架上（油門 0%）。推升油門超過約 35% 即可離地，再將俯仰搖桿微推向前（壓低機頭）加速突防。</p>
+        <p>• <b>純淨飛行視野</b>：進入戰場後全螢幕僅保留 FPV 圖傳畫面與左右雙搖桿。按 <b>Space</b> 可手動引爆，按 <b>R</b> 可重新部署於發射台，按 <b>ESC</b> 可隨時回到整備選單切換模式。</p>
+      </div>
+
+      <div class="flex justify-end">
+        <button id="btnConfirmHelp" type="button" class="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-black font-bold">
+          了解，返回整備選單
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // ==========================================
+      // 1. STATE & CONFIGURATION
+      // ==========================================
+      const LAUNCH_PAD_POS = new THREE.Vector3(0, 0.75, 235);
+
+      const state = {
+        inBattlefield: false,    // Starts on Pre-Flight Start Screen
+        stickMode: 'US',         // 'US' (Mode 2) or 'JP' (Mode 1)
+        flightMode: 'ANGLE',     // 'ANGLE' (self-leveling default) or 'ACRO' (rate mode)
+        payloadView: 'RPG_WIRE', // 'RPG_WIRE', 'WIRE_ONLY', 'CLEAN'
+        cameraTiltDeg: 20,       // FPV uptilt angle (degrees)
+        armed: true,
+        onLaunchPad: true,       // Sitting cleanly on ground launch stand until throttle > 0.32
+        colorMode: 'COLOR',      // 'COLOR' or 'MONO'
+        audioEnabled: true,
+        audioStarted: false,
+        detonated: false,
+        orbitCamActive: false,
+        orbitCenter: new THREE.Vector3(),
+        orbitAngle: 0,
+        orbitElapsed: 0,
+        flightTimeSec: 0,
+        batteryVolts: 25.2,      // 6S LiPo (4.2V * 6)
+        mahUsed: 0,
+        amps: 0.8,
+        rssi: 99,
+        lq: 100,
+        destroyedCount: 0,
+        totalTargets: 0,
+        nearestTargetText: 'TGT: STANDBY ON PAD',
+        missionFeedText: 'GROUND PAD READY // 推升油門起飛 (ESC: 選單)',
+
+        // Normalized control channels [-1..1] for Pitch/Roll/Yaw, [0..1] for Throttle
+        throttle: 0.0,
+        yaw: 0,
+        pitch: 0,
+        roll: 0,
+
+        // Raw stick positions X [-1..1], Y [-1..1] (where +Y is up)
+        // Throttle starts at bottom (-1.0 = 0% throttle) on the ground pad
+        leftStick: { x: 0, y: -1.0, active: false, pointerId: null },
+        rightStick: { x: 0, y: 0, active: false, pointerId: null },
+
+        // Keyboard state
+        keys: {}
+      };
+
+      // ==========================================
+      // 2. SYNTHESIZED WEB AUDIO (QUAD MOTORS + STATIC + EXPLOSION)
+      // ==========================================
+      let audioCtx = null;
+      let motorOsc1 = null;
+      let motorOsc2 = null;
+      let motorGain = null;
+      let staticNoiseNode = null;
+      let staticGain = null;
+
+      function initAudio() {
+        if (state.audioStarted) return;
+        try {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass) return;
+          audioCtx = new AudioContextClass();
+
+          motorOsc1 = audioCtx.createOscillator();
+          motorOsc2 = audioCtx.createOscillator();
+          motorGain = audioCtx.createGain();
+
+          motorOsc1.type = 'sawtooth';
+          motorOsc2.type = 'triangle';
+          motorOsc1.frequency.value = 110;
+          motorOsc2.frequency.value = 225;
+          motorGain.gain.value = 0.0;
+
+          const motorFilter = audioCtx.createBiquadFilter();
+          motorFilter.type = 'bandpass';
+          motorFilter.frequency.value = 520;
+          motorFilter.Q.value = 1.6;
+
+          motorOsc1.connect(motorFilter);
+          motorOsc2.connect(motorFilter);
+          motorFilter.connect(motorGain);
+          motorGain.connect(audioCtx.destination);
+
+          motorOsc1.start();
+          motorOsc2.start();
+
+          const bufferSize = audioCtx.sampleRate * 2;
+          const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+          const output = noiseBuffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            output[i] = Math.random() * 2 - 1;
+          }
+
+          staticNoiseNode = audioCtx.createBufferSource();
+          staticNoiseNode.buffer = noiseBuffer;
+          staticNoiseNode.loop = true;
+
+          const staticFilter = audioCtx.createBiquadFilter();
+          staticFilter.type = 'bandpass';
+          staticFilter.frequency.value = 1800;
+          staticFilter.Q.value = 0.7;
+
+          staticGain = audioCtx.createGain();
+          staticGain.gain.value = 0.0;
+
+          staticNoiseNode.connect(staticFilter);
+          staticFilter.connect(staticGain);
+          staticGain.connect(audioCtx.destination);
+          staticNoiseNode.start();
+
+          state.audioStarted = true;
+        } catch (err) {}
+      }
+
+      function updateAudio(dt, speedMs, staticLevel) {
+        if (!state.audioStarted || !audioCtx) return;
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume().catch(() => {});
+        }
+        if (!state.audioEnabled || !state.inBattlefield) {
+          motorGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+          staticGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+          return;
+        }
+
+        if (state.detonated) {
+          motorGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.02);
+          const postStatic = state.orbitCamActive ? 0.015 : 0.14;
+          staticGain.gain.setTargetAtTime(postStatic, audioCtx.currentTime, 0.03);
+          return;
+        }
+
+        const rpmFactor = Math.min(1, Math.max(0, state.throttle * 0.85 + (speedMs / 45) * 0.25));
+        const baseFreq = 115 + rpmFactor * 545;
+        motorOsc1.frequency.setTargetAtTime(baseFreq, audioCtx.currentTime, 0.04);
+        motorOsc2.frequency.setTargetAtTime(baseFreq * 2.03, audioCtx.currentTime, 0.04);
+
+        const targetMotorVol = (state.armed && state.throttle > 0.03) ? (0.015 + rpmFactor * 0.08) : 0.0;
+        motorGain.gain.setTargetAtTime(targetMotorVol, audioCtx.currentTime, 0.05);
+
+        const targetStaticVol = Math.min(0.12, staticLevel * 0.09);
+        staticGain.gain.setTargetAtTime(targetStaticVol, audioCtx.currentTime, 0.05);
+      }
+
+      function playExplosionSound() {
+        if (!state.audioStarted || !audioCtx || !state.audioEnabled) return;
+        try {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(95, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(18, audioCtx.currentTime + 0.55);
+
+          gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.62);
+        } catch (e) {}
+      }
+
+      // ==========================================
+      // 3. THREE.JS UPGRADED 3D BATTLEFIELD SCENE
+      // ==========================================
+      const simCanvas = document.getElementById('simCanvas');
+      const fpvRigCanvas = document.getElementById('fpvRigCanvas');
+      const rigCtx = fpvRigCanvas.getContext('2d');
+      const noiseCanvas = document.getElementById('noiseCanvas');
+      const noiseCtx = noiseCanvas.getContext('2d');
+
+      const renderer = new THREE.WebGLRenderer({
+        canvas: simCanvas,
+        antialias: false,
+        powerPreference: 'high-performance'
+      });
+      // Authentic 5.8GHz PAL/NTSC analog resolution feel while keeping distant targets recognizable
+      renderer.setPixelRatio(0.55);
+      renderer.shadowMap.enabled = false;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x78857c);
+      scene.fog = new THREE.FogExp2(0x78857c, 0.0019);
+
+      const camera = new THREE.PerspectiveCamera(108, window.innerWidth / window.innerHeight, 0.15, 1300);
+
+      // Drone physics state
+      const drone = {
+        pos: LAUNCH_PAD_POS.clone(),
+        vel: new THREE.Vector3(0, 0, 0),
+        quat: new THREE.Quaternion(),
+        angVel: new THREE.Vector3(0, 0, 0),
+        mass: 2.35,
+        maxThrust: 50.0,
+        dragCoeff: 0.046,
+        whiskerContactCompress: 0
+      };
+
+      // Atmospheric battlefield lighting (sky/ground hemisphere + warm low sun + orange fire glow)
+      const hemiLight = new THREE.HemisphereLight(0xdde8e0, 0x3b3528, 0.75);
+      scene.add(hemiLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffeed4, 0.95);
+      dirLight.position.set(180, 240, 140);
+      scene.add(dirLight);
+
+      // Deterministic terrain elevation function with hills, river depression, and flat roads
+      function getTerrainHeight(x, z) {
+        // Keep central highway corridor and launch pad area flat
+        if (Math.abs(x) <= 22) return 0;
+        if (Math.hypot(x, z - 235) < 26) return 0;
+        // River channel running East-West around z = 145 (except road bridge at |x| <= 22)
+        if (Math.abs(z - 145) < 14) {
+          return -1.4;
+        }
+        const hill =
+          Math.sin(x * 0.012) * Math.cos(z * 0.012) * 6.5 +
+          Math.sin(x * 0.032 + z * 0.025) * 1.8;
+        return Math.max(0, hill);
+      }
+
+      // Upgraded Vertex-Colored Battlefield Terrain (Mud, Grass, Shell Craters, Scorched Earth)
+      const groundGeo = new THREE.PlaneGeometry(1600, 1600, 96, 96);
+      groundGeo.rotateX(-Math.PI / 2);
+      const posAttr = groundGeo.attributes.position;
+      const colorsArr = new Float32Array(posAttr.count * 3);
+
+      for (let i = 0; i < posAttr.count; i++) {
+        const vx = posAttr.getX(i);
+        const vz = posAttr.getZ(i);
+        const vy = getTerrainHeight(vx, vz);
+        posAttr.setY(i, vy);
+
+        // Compute tactical ground coloration (olive grass, muddy tracks, dark shell craters)
+        const noiseVal = Math.sin(vx * 0.07) * Math.cos(vz * 0.07);
+        let r = 0.23, g = 0.29, b = 0.19;
+        if (vy < -0.2) {
+          // Muddy river bank
+          r = 0.22; g = 0.20; b = 0.15;
+        } else if (Math.abs(vx) < 26 || Math.abs(vz + 40) < 18) {
+          // Muddy shoulder near roads
+          r = 0.28; g = 0.25; b = 0.20;
+        } else if (vy > 3.8) {
+          // Dry highland grass/rock
+          r = 0.31; g = 0.34; b = 0.23;
+        } else if (noiseVal > 0.65) {
+          // Artillery scorched patch
+          r = 0.16; g = 0.15; b = 0.13;
+        }
+        colorsArr[i * 3] = r;
+        colorsArr[i * 3 + 1] = g;
+        colorsArr[i * 3 + 2] = b;
+      }
+      groundGeo.setAttribute('color', new THREE.BufferAttribute(colorsArr, 3));
+      groundGeo.computeVertexNormals();
+
+      const groundMat = new THREE.MeshLambertMaterial({
+        vertexColors: true,
+        flatShading: true
+      });
+      const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+      scene.add(groundMesh);
+
+      // Asphalt & Mud Main Highway + Tank Track Ruts + Concrete River Bridge
+      function buildRoadsAndLaunchBase() {
+        const envGroup = new THREE.Group();
+
+        // Main North-South Paved Road
+        const roadNS = new THREE.Mesh(
+          new THREE.PlaneGeometry(16, 1200),
+          new THREE.MeshLambertMaterial({ color: 0x3b3936 })
+        );
+        roadNS.rotation.x = -Math.PI / 2;
+        roadNS.position.y = 0.08;
+        envGroup.add(roadNS);
+
+        // Muddy tank track ruts along road
+        const rutMat = new THREE.MeshBasicMaterial({ color: 0x29241d });
+        const rutL = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1200), rutMat);
+        rutL.rotation.x = -Math.PI / 2;
+        rutL.position.set(-4.2, 0.1, 0);
+        const rutR = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1200), rutMat);
+        rutR.rotation.x = -Math.PI / 2;
+        rutR.position.set(4.2, 0.1, 0);
+        envGroup.add(rutL, rutR);
+
+        // East-West Crossroad
+        const roadEW = new THREE.Mesh(
+          new THREE.PlaneGeometry(900, 13),
+          new THREE.MeshLambertMaterial({ color: 0x423e37 })
+        );
+        roadEW.rotation.x = -Math.PI / 2;
+        roadEW.position.set(0, 0.09, -40);
+        envGroup.add(roadEW);
+
+        // River Water Stream at Z = 145
+        const riverWater = new THREE.Mesh(
+          new THREE.PlaneGeometry(1600, 22),
+          new THREE.MeshLambertMaterial({ color: 0x24383a })
+        );
+        riverWater.rotation.x = -Math.PI / 2;
+        riverWater.position.set(0, -0.65, 145);
+        envGroup.add(riverWater);
+
+        // Concrete Bridge spanning the river at X=0, Z=145
+        const bridgeDeck = new THREE.Mesh(
+          new THREE.BoxGeometry(20, 0.8, 30),
+          new THREE.MeshLambertMaterial({ color: 0x6b6a65 })
+        );
+        bridgeDeck.position.set(0, 0.2, 145);
+        const bridgeWallL = new THREE.Mesh(
+          new THREE.BoxGeometry(1.2, 1.4, 30),
+          new THREE.MeshLambertMaterial({ color: 0x575652 })
+        );
+        bridgeWallL.position.set(-9.2, 1.1, 145);
+        const bridgeWallR = bridgeWallL.clone();
+        bridgeWallR.position.set(9.2, 1.1, 145);
+        envGroup.add(bridgeDeck, bridgeWallL, bridgeWallR);
+
+        // Shell Craters scattered across battlefield
+        const craterMat = new THREE.MeshLambertMaterial({ color: 0x1e1c18 });
+        const craterCoords = [
+          [-18, 175], [22, 110], [-30, 50], [19, -5], [-24, -60], [32, -120], [-14, 15], [48, 25]
+        ];
+        craterCoords.forEach(([cx, cz]) => {
+          const cy = getTerrainHeight(cx, cz);
+          const crater = new THREE.Mesh(new THREE.RingGeometry(1.2, 4.8, 12), craterMat);
+          crater.rotation.x = -Math.PI / 2;
+          crater.position.set(cx, cy + 0.12, cz);
+          envGroup.add(crater);
+        });
+
+        // Utility Poles along the main road for realistic low-altitude speed reference
+        const poleMat = new THREE.MeshLambertMaterial({ color: 0x3f3328 });
+        for (let pz = -220; pz <= 210; pz += 36) {
+          [-11.5, 11.5].forEach((px) => {
+            const pole = new THREE.Group();
+            const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 8.5, 6), poleMat);
+            post.position.y = 4.25;
+            const crossbar = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.18, 0.18), poleMat);
+            crossbar.position.y = 7.9;
+            pole.add(post, crossbar);
+            pole.position.set(px, 0, pz);
+            envGroup.add(pole);
+          });
+        }
+
+        // Dragon's Teeth Anti-Tank Concrete Pyramids Line
+        const toothMat = new THREE.MeshLambertMaterial({ color: 0x73706a });
+        const toothGeo = new THREE.ConeGeometry(0.95, 1.35, 4);
+        for (let tx = -85; tx <= 85; tx += 4.5) {
+          if (Math.abs(tx) < 11) continue; // gap on main road
+          const tz = 168 + (tx % 9 === 0 ? 2.2 : 0);
+          const ty = getTerrainHeight(tx, tz);
+          const tooth = new THREE.Mesh(toothGeo, toothMat);
+          tooth.position.set(tx, ty + 0.65, tz);
+          tooth.rotation.y = Math.PI / 4;
+          envGroup.add(tooth);
+        }
+
+        // ======================================================
+        // FORWARD OPERATING LAUNCH POSITION (Z = 235, X = 0)
+        // ======================================================
+        const bunkerGroup = new THREE.Group();
+        const sandbagMat = new THREE.MeshLambertMaterial({ color: 0x6e634b });
+        const woodMat = new THREE.MeshLambertMaterial({ color: 0x4d3824 });
+        const camoMat = new THREE.MeshLambertMaterial({ color: 0x2e3b25 });
+        const steelMat = new THREE.MeshLambertMaterial({ color: 0x26292b });
+
+        // Launch table / angled wooden & metal launch rail right under drone at (0, 0, 235)
+        const tableTop = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 1.6), woodMat);
+        tableTop.position.set(0, 0.56, 235);
+        const legGeo = new THREE.BoxGeometry(0.14, 0.56, 0.14);
+        [[-0.65, -0.65], [0.65, -0.65], [-0.65, 0.65], [0.65, 0.65]].forEach(([lx, lz]) => {
+          const leg = new THREE.Mesh(legGeo, steelMat);
+          leg.position.set(lx, 0.28, 235 + lz);
+          bunkerGroup.add(leg);
+        });
+        bunkerGroup.add(tableTop);
+
+        // Sandbag semicircle parapet around launch pad
+        for (let ang = -Math.PI * 0.82; ang <= Math.PI * 0.82; ang += 0.28) {
+          if (Math.abs(ang) < 0.35) continue; // leave front opening clear for low takeoff
+          const sx = Math.sin(ang) * 4.2;
+          const sz = 235 - Math.cos(ang) * 4.2;
+          const bag = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.85, 0.65), sandbagMat);
+          bag.position.set(sx, 0.42, sz);
+          bag.rotation.y = -ang;
+          bunkerGroup.add(bag);
+        }
+
+        // VTX Ground Station Tripod Antenna & Ammo Crates next to launch pad
+        const tripodPole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 3.6, 6), steelMat);
+        tripodPole.position.set(3.2, 1.8, 232.5);
+        const patchAntenna = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.65, 0.12), camoMat);
+        patchAntenna.position.set(3.2, 3.5, 232.5);
+        const crate1 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.75, 0.9), camoMat);
+        crate1.position.set(-2.6, 0.38, 233.5);
+        const crate2 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 0.8), woodMat);
+        crate2.position.set(-2.4, 1.05, 233.5);
+        bunkerGroup.add(tripodPole, patchAntenna, crate1, crate2);
+
+        envGroup.add(bunkerGroup);
+        scene.add(envGroup);
+      }
+      buildRoadsAndLaunchBase();
+
+      // ==========================================
+      // 4. UPGRADED 3D TARGETS: TANKS, APCs,UCKS, RUINED BUILDINGS, INFANTRY
+      // ==========================================
+      const targets = [];
+      const debrisParticles = [];
+      const smokeColumns = [];
+
+      // Upgraded Main Battle Tank (T-90M / T-72B3 with road wheels, ERA blocks, turret, cope cage, fuel drums)
+      function createTank(x, z, headingRad, patrolSpeed, label) {
+        const group = new THREE.Group();
+        const hullMat = new THREE.MeshLambertMaterial({ color: 0x33402a });
+        const darkMat = new THREE.MeshLambertMaterial({ color: 0x181b16 });
+        const eraMat = new THREE.MeshLambertMaterial({ color: 0x445438 });
+        const cageMat = new THREE.MeshLambertMaterial({ color: 0x2b3028 });
+
+        // Left & Right Track Assemblies + 6 Road Wheels per side
+        const trackGeo = new THREE.BoxGeometry(0.95, 1.05, 7.4);
+        const trackL = new THREE.Mesh(trackGeo, darkMat);
+        trackL.position.set(-1.6, 0.55, 0);
+        const trackR = new THREE.Mesh(trackGeo, darkMat);
+        trackR.position.set(1.6, 0.55, 0);
+        group.add(trackL, trackR);
+
+        const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 1.05, 8);
+        wheelGeo.rotateZ(Math.PI / 2);
+        for (let wz = -2.6; wz <= 2.6; wz += 1.04) {
+          const wl = new THREE.Mesh(wheelGeo, darkMat);
+          wl.position.set(-1.62, 0.44, wz);
+          const wr = new THREE.Mesh(wheelGeo, darkMat);
+          wr.position.set(1.62, 0.44, wz);
+          group.add(wl, wr);
+        }
+
+        // Main Armored Hull + Side Skirt ERA Tiles
+        const hull = new THREE.Mesh(new THREE.BoxGeometry(2.7, 1.05, 7.0), hullMat);
+        hull.position.set(0, 0.9, 0);
+        const skirtL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.55, 6.2), eraMat);
+        skirtL.position.set(-2.05, 0.95, 0.2);
+        const skirtR = skirtL.clone();
+        skirtR.position.set(2.05, 0.95, 0.2);
+        group.add(hull, skirtL, skirtR);
+
+        // Sloped Front ERA Glacis
+        const glacis = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.32, 2.0), eraMat);
+        glacis.position.set(0, 1.38, 2.2);
+        glacis.rotation.x = 0.28;
+        group.add(glacis);
+
+        // Rear External Fuel Drums
+        const drumGeo = new THREE.CylinderGeometry(0.32, 0.32, 1.1, 8);
+        drumGeo.rotateZ(Math.PI / 2);
+        const drum1 = new THREE.Mesh(drumGeo, eraMat);
+        drum1.position.set(-0.7, 1.15, -3.65);
+        const drum2 = new THREE.Mesh(drumGeo, eraMat);
+        drum2.position.set(0.7, 1.15, -3.65);
+        group.add(drum1, drum2);
+
+        // Turret + Wedge Reactive Armor + Commander Cupola
+        const turret = new THREE.Mesh(new THREE.BoxGeometry(2.45, 0.85, 3.1), eraMat);
+        turret.position.set(0, 1.78, -0.15);
+        const cheekL = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.72, 1.4), hullMat);
+        cheekL.position.set(-0.75, 1.78, 1.35);
+        cheekL.rotation.y = 0.35;
+        const cheekR = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.72, 1.4), hullMat);
+        cheekR.position.set(0.75, 1.78, 1.35);
+        cheekR.rotation.y = -0.35;
+        const cupola = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.48, 0.35, 8), darkMat);
+        cupola.position.set(0.55, 2.32, -0.4);
+        group.add(turret, cheekL, cheekR, cupola);
+
+        // 125mm Smoothbore Main Gun + Thermal Sleeve
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, 4.9, 8), darkMat);
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.set(0, 1.82, 3.0);
+        const fumeExtractor = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.7, 8), eraMat);
+        fumeExtractor.rotation.x = Math.PI / 2;
+        fumeExtractor.position.set(0, 1.82, 2.4);
+        group.add(barrel, fumeExtractor);
+
+        // Anti-Drone Roof Cope Cage Screen
+        const cageRoof = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.08, 3.2), cageMat);
+        cageRoof.position.set(0, 2.95, -0.15);
+        group.add(cageRoof);
+        [[-1.2, -1.4], [1.2, -1.4], [-1.2, 1.1], [1.2, 1.1]].forEach(([px, pz]) => {
+          const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.9, 4), cageMat);
+          strut.position.set(px, 2.5, pz);
+          group.add(strut);
+        });
+
+        const y0 = getTerrainHeight(x, z);
+        group.position.set(x, y0, z);
+        group.rotation.y = headingRad;
+        scene.add(group);
+
+        targets.push({
+          type: 'TANK',
+          name: label || 'T-90M 主戰車',
+          mesh: group,
+          pos: group.position,
+          hitRadius: 4.4,
+          hitHeight: 3.1,
+          heading: headingRad,
+          speed: patrolSpeed,
+          baseX: x,
+          baseZ: z,
+          patrolRange: 65,
+          patrolDir: 1,
+          destroyed: false
+        });
+      }
+
+      // Upgraded Wheeled BTR-82A / BMP-2 Armored Vehicle
+      function createAPC(x, z, headingRad, patrolSpeed, label) {
+        const group = new THREE.Group();
+        const bodyMat = new THREE.MeshLambertMaterial({ color: 0x434f39 });
+        const trimMat = new THREE.MeshLambertMaterial({ color: 0x2e3727 });
+        const wheelMat = new THREE.MeshLambertMaterial({ color: 0x161816 });
+
+        const lowerHull = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.15, 6.6), bodyMat);
+        lowerHull.position.set(0, 1.02, 0);
+        const noseBow = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.7, 1.6), trimMat);
+        noseBow.position.set(0, 1.1, 3.1);
+        noseBow.rotation.x = 0.4;
+        const upperDeck = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.6, 5.0), trimMat);
+        upperDeck.position.set(0, 1.78, -0.3);
+        group.add(lowerHull, noseBow, upperDeck);
+
+        // BTR-82A BPPU Turret + 30mm 2A72 Autocannon
+        const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.88, 0.6, 8), bodyMat);
+        turret.position.set(0, 2.32, 0.75);
+        const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 2.6, 6), wheelMat);
+        gun.rotation.x = Math.PI / 2;
+        gun.position.set(0, 2.38, 2.0);
+        group.add(turret, gun);
+
+        // 8x8 Heavy Off-Road Wheels
+        const wheelGeo = new THREE.CylinderGeometry(0.54, 0.54, 0.48, 10);
+        wheelGeo.rotateZ(Math.PI / 2);
+        [-2.3, -0.8, 0.8, 2.3].forEach((zo) => {
+          const wl = new THREE.Mesh(wheelGeo, wheelMat);
+          wl.position.set(-1.48, 0.54, zo);
+          const wr = new THREE.Mesh(wheelGeo, wheelMat);
+          wr.position.set(1.48, 0.54, zo);
+          group.add(wl, wr);
+        });
+
+        const y0 = getTerrainHeight(x, z);
+        group.position.set(x, y0, z);
+        group.rotation.y = headingRad;
+        scene.add(group);
+
+        targets.push({
+          type: 'APC',
+          name: label || 'BTR-82A 裝甲車',
+          mesh: group,
+          pos: group.position,
+          hitRadius: 4.0,
+          hitHeight: 2.8,
+          heading: headingRad,
+          speed: patrolSpeed,
+          baseX: x,
+          baseZ: z,
+          patrolRange: 80,
+          patrolDir: 1,
+          destroyed: false
+        });
+      }
+
+      // Upgraded Multi-Story Fortified Building / Ruined House with Roof & Windows
+      function createHouse(x, z, width, depth, height, wallColor, label) {
+        const group = new THREE.Group();
+        const wallMat = new THREE.MeshLambertMaterial({ color: wallColor });
+        const darkConcreteMat = new THREE.MeshLambertMaterial({ color: 0x4a4640 });
+        const roofMat = new THREE.MeshLambertMaterial({ color: 0x5c3024 });
+        const winMat = new THREE.MeshBasicMaterial({ color: 0x111512 });
+
+        // Main Building Structure
+        const walls = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), wallMat);
+        walls.position.set(0, height / 2, 0);
+        group.add(walls);
+
+        // Concrete Floor Ledges
+        const ledge = new THREE.Mesh(new THREE.BoxGeometry(width + 0.5, 0.35, depth + 0.5), darkConcreteMat);
+        ledge.position.set(0, height * 0.5, 0);
+        group.add(ledge);
+
+        // Pitched Roof + Chimney / Sandbagged Roof Lookout
+        const roof = new THREE.Mesh(
+          new THREE.ConeGeometry(Math.max(width, depth) * 0.76, 2.8, 4),
+          roofMat
+        );
+        roof.position.set(0, height + 1.4, 0);
+        roof.rotation.y = Math.PI / 4;
+        const chimney = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.2, 1.1), darkConcreteMat);
+        chimney.position.set(width * 0.25, height + 1.5, -depth * 0.2);
+        group.add(roof, chimney);
+
+        // Multi-story Windows on Front/Back and Sides
+        const winFrontGeo = new THREE.BoxGeometry(1.5, 1.25, depth + 0.16);
+        [-width * 0.28, 0, width * 0.28].forEach((wx) => {
+          const wf1 = new THREE.Mesh(winFrontGeo, winMat);
+          wf1.position.set(wx, height * 0.28, 0);
+          const wf2 = new THREE.Mesh(winFrontGeo, winMat);
+          wf2.position.set(wx, height * 0.74, 0);
+          group.add(wf1, wf2);
+        });
+
+        const y0 = getTerrainHeight(x, z);
+        group.position.set(x, y0, z);
+        scene.add(group);
+
+        targets.push({
+          type: 'HOUSE',
+          name: label || '武裝據點建築',
+          mesh: group,
+          pos: group.position,
+          hitRadius: Math.max(width, depth) * 0.64,
+          hitHeight: height + 2.4,
+          heading: 0,
+          speed: 0,
+          baseX: x,
+          baseZ: z,
+          patrolRange: 0,
+          patrolDir: 1,
+          destroyed: false
+        });
+      }
+
+      // Upgraded Infantry Squad with Trench Sandbag Emplacement
+      function createInfantrySquad(x, z, headingRad, patrolSpeed, label) {
+        const group = new THREE.Group();
+        const uniformMat = new THREE.MeshLambertMaterial({ color: 0x3b4429 });
+        const gearMat = new THREE.MeshLambertMaterial({ color: 0x1f2419 });
+        const skinMat = new THREE.MeshLambertMaterial({ color: 0xc8a484 });
+        const bagMat = new THREE.MeshLambertMaterial({ color: 0x6b6048 });
+
+        // Sandbag firing wall if stationary or low-speed
+        if (patrolSpeed < 1.25) {
+          const wall = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.9, 0.7), bagMat);
+          wall.position.set(0, 0.45, 1.8);
+          group.add(wall);
+        }
+
+        const offsets = [
+          { dx: 0, dz: 0 },
+          { dx: -1.5, dz: -1.1 },
+          { dx: 1.5, dz: -0.9 },
+          { dx: -0.7, dz: 1.1 },
+          { dx: 0.9, dz: 1.0 }
+        ];
+
+        offsets.forEach((off) => {
+          const soldier = new THREE.Group();
+          const legs = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.85, 0.3), uniformMat);
+          legs.position.y = 0.42;
+          const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.76, 0.36), gearMat);
+          torso.position.y = 1.2;
+          const head = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, 0.32), skinMat);
+          head.position.y = 1.75;
+          const helmet = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.22, 0.42), gearMat);
+          helmet.position.y = 1.92;
+          const rifle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 1.05), gearMat);
+          rifle.position.set(0.26, 1.25, 0.4);
+
+          soldier.add(legs, torso, head, helmet, rifle);
+          soldier.position.set(off.dx, 0, off.dz);
+          group.add(soldier);
+        });
+
+        const y0 = getTerrainHeight(x, z);
+        group.position.set(x, y0, z);
+        group.rotation.y = headingRad;
+        scene.add(group);
+
+        targets.push({
+          type: 'INFANTRY',
+          name: label || '敵軍步兵班組',
+          mesh: group,
+          pos: group.position,
+          hitRadius: 3.1,
+          hitHeight: 2.3,
+          heading: headingRad,
+          speed: patrolSpeed,
+          baseX: x,
+          baseZ: z,
+          patrolRange: 26,
+          patrolDir: 1,
+          destroyed: false
+        });
+      }
+
+      // Trees, Destroyed Wreckages & Battlefield Clutter
+      const envProps = new THREE.Group();
+      scene.add(envProps);
+      function populateEnvironmentProps() {
+        const trunkMat = new THREE.MeshLambertMaterial({ color: 0x3b2d20 });
+        const foliageMat1 = new THREE.MeshLambertMaterial({ color: 0x273820 });
+        const foliageMat2 = new THREE.MeshLambertMaterial({ color: 0x354426 });
+
+        for (let i = 0; i < 130; i++) {
+          const tx = (Math.random() - 0.5) * 760;
+          const tz = (Math.random() - 0.5) * 760;
+          // Keep road corridors & launch bunker clear
+          if (Math.abs(tx) < 24 || Math.abs(tz + 40) < 22 || Math.hypot(tx, tz - 235) < 35) continue;
+          const ty = getTerrainHeight(tx, tz);
+          if (ty < -0.1) continue;
+
+          const tree = new THREE.Group();
+          const hScale = 0.8 + Math.random() * 0.7;
+          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.42, 3.2 * hScale, 5), trunkMat);
+          trunk.position.y = 1.6 * hScale;
+
+          const crown1 = new THREE.Mesh(
+            new THREE.ConeGeometry(2.6 * hScale, 5.5 * hScale, 6),
+            i % 2 === 0 ? foliageMat1 : foliageMat2
+          );
+          crown1.position.y = 4.8 * hScale;
+          const crown2 = new THREE.Mesh(
+            new THREE.ConeGeometry(1.9 * hScale, 4.2 * hScale, 6),
+            foliageMat1
+          );
+          crown2.position.y = 7.2 * hScale;
+          tree.add(trunk, crown1, crown2);
+          tree.position.set(tx, ty, tz);
+          envProps.add(tree);
+        }
+      }
+      populateEnvironmentProps();
+
+      // Spawn 18 High-Detail Targets across the Battlefield
+      function spawnBattlefieldTargets() {
+        targets.forEach((t) => scene.remove(t.mesh));
+        targets.length = 0;
+        smokeColumns.forEach((s) => scene.remove(s.mesh));
+        smokeColumns.length = 0;
+
+        // 1. Armored Spearhead & Flanks (5 MBT Tanks)
+        createTank(0, 95, 0, 2.8, 'T-90M 先鋒主戰車 #1');
+        createTank(-5, 10, 0, 2.5, 'T-72B3 裝甲主戰車 #2');
+        createTank(38, -40, -Math.PI / 2, 3.2, 'T-90M 側翼主戰車 #3');
+        createTank(-52, -95, Math.PI / 4, 2.4, 'T-80BV 指揮戰車 #4');
+        createTank(6, -115, 0, 2.6, 'T-90M 後衛主戰車 #5');
+
+        // 2. Mechanized APCs & AA Vehicles (5 APCs)
+        createAPC(5, 165, 0, 4.2, 'BTR-82A 偵察裝甲車 #1');
+        createAPC(-28, 65, Math.PI / 2, 4.0, 'BMP-2 步兵戰車 #2');
+        createAPC(62, -38, -Math.PI / 2, 5.0, 'BTR-82A 巡邏裝甲車 #3');
+        createAPC(-36, -38, Math.PI / 2, 4.5, 'BMP-3 突擊裝甲車 #4');
+        createAPC(16, -155, 0, 3.8, '9K35 防空裝甲車 #5');
+
+        // 3. Fortified Village & Command Buildings (4 Multi-Story Houses)
+        createHouse(-28, -18, 11, 9, 6.4, 0x8c8273, '敵方前線指揮大樓 #1');
+        createHouse(28, 25, 12, 9, 6.0, 0x7a7468, '彈藥補給庫房 #2');
+        createHouse(-44, -75, 12, 10, 7.2, 0x85786c, '通訊中繼陣地樓 #3');
+        createHouse(38, -92, 10, 8, 5.6, 0x7c6f64, '雷達監控站房 #4');
+
+        // 4. Combat Personnel / Infantry Squads (4 Squads)
+        createInfantrySquad(-15, 125, 0, 1.1, '渡河警戒步兵班 #1');
+        createInfantrySquad(19, 68, -Math.PI / 2, 1.0, '反裝甲機槍陣地 #2');
+        createInfantrySquad(-19, -50, Math.PI / 3, 1.4, '巡邏步兵小隊 #3');
+        createInfantrySquad(22, -68, -Math.PI / 4, 1.1, '迫擊砲觀測班 #4');
+
+        // Add 2 pre-existing ambient smoke plumes on battlefield horizon for combat atmosphere
+        spawnAmbientSmoke(new THREE.Vector3(-48, 0, 110));
+        spawnAmbientSmoke(new THREE.Vector3(52, 0, -15));
+
+        state.destroyedCount = 0;
+        state.totalTargets = targets.length;
+        updateTopBarBadges();
+      }
+
+      // ==========================================
+      // 5. EXPLOSION PARTICLES & BURNING WRECKAGE SMOKE
+      // ==========================================
+      function spawnAmbientSmoke(worldPos) {
+        const smokeGroup = new THREE.Group();
+        for (let k = 0; k < 8; k++) {
+          const puffMat = new THREE.MeshBasicMaterial({
+            color: k === 0 ? 0xe05a10 : (k === 1 ? 0x8a3812 : 0x1e1e1e)
+          });
+          const puff = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(1.3 + k * 0.55, 0),
+            puffMat
+          );
+          puff.position.set(
+            (Math.random() - 0.5) * 1.6,
+            1.1 + k * 2.5,
+            (Math.random() - 0.5) * 1.6
+          );
+          smokeGroup.add(puff);
+        }
+        smokeGroup.position.copy(worldPos);
+        scene.add(smokeGroup);
+        smokeColumns.push({ mesh: smokeGroup, phase: Math.random() * 10 });
+      }
+
+      const shockwaves = [];
+
+      function spawnExplosionEffect(worldPos, isKill) {
+        const colors = [0xffdd55, 0xff8811, 0xff3300, 0x2b2b2b, 0x4b4b4b];
+        const count = isKill ? 85 : 48;
+        for (let i = 0; i < count; i++) {
+          const size = (isKill ? 0.45 : 0.35) + Math.random() * (isKill ? 1.35 : 0.95);
+          const mat = new THREE.MeshBasicMaterial({
+            color: colors[Math.floor(Math.random() * colors.length)]
+          });
+          const p = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), mat);
+          p.position.copy(worldPos);
+          p.position.y += 0.9;
+          const speed = (isKill ? 12 : 9) + Math.random() * (isKill ? 36 : 28);
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.random() * Math.PI * 0.48;
+          const vel = new THREE.Vector3(
+            Math.cos(theta) * Math.sin(phi) * speed,
+            Math.cos(phi) * speed + (isKill ? 9 : 6),
+            Math.sin(theta) * Math.sin(phi) * speed
+          );
+          scene.add(p);
+          debrisParticles.push({ mesh: p, vel, life: 2.4 + Math.random() * 1.8 });
+        }
+
+        // Expanding glowing fireball core + ground shockwave ring
+        const fireballMat = new THREE.MeshBasicMaterial({
+          color: 0xffaa22,
+          transparent: true,
+          opacity: 0.95
+        });
+        const fireball = new THREE.Mesh(new THREE.SphereGeometry(2.2, 12, 12), fireballMat);
+        fireball.position.copy(worldPos);
+        fireball.position.y += 1.5;
+        scene.add(fireball);
+
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: 0xffcc44,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.9
+        });
+        const ring = new THREE.Mesh(new THREE.RingGeometry(1.0, 2.4, 24), ringMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.copy(worldPos);
+        ring.position.y = getTerrainHeight(worldPos.x, worldPos.z) + 0.25;
+        scene.add(ring);
+
+        shockwaves.push({
+          fireball,
+          ring,
+          age: 0,
+          maxAge: isKill ? 1.8 : 1.0
+        });
+
+        spawnAmbientSmoke(worldPos);
+      }
+
+      function markTargetDestroyed(target) {
+        if (target.destroyed) return;
+        target.destroyed = true;
+        target.speed = 0;
+        state.destroyedCount++;
+
+        target.mesh.traverse((child) => {
+          if (child.isMesh && child.material) {
+            child.material = new THREE.MeshLambertMaterial({ color: 0x1a1715 });
+          }
+        });
+        target.mesh.rotation.z = (Math.random() - 0.5) * 0.25;
+        target.mesh.position.y -= 0.25;
+
+        spawnExplosionEffect(target.pos, true);
+        updateTopBarBadges();
+      }
+
+      // ==========================================
+      // 6. FPV WARHEAD (PG-7V RPG) & COPPER WHISKER TRIGGER OVERLAY
+      // ==========================================
+      function drawFpvNoseRig(timeSec, angularVel) {
+        const w = fpvRigCanvas.width;
+        const h = fpvRigCanvas.height;
+        rigCtx.clearRect(0, 0, w, h);
+
+        if (state.payloadView === 'CLEAN' || state.detonated) return;
+
+        const vibAmp = state.onLaunchPad ? (state.throttle * 1.2) : (1.1 + state.throttle * 2.5);
+        const vibX = Math.sin(timeSec * 58) * vibAmp - angularVel.y * 14;
+        const vibY = Math.cos(timeSec * 64) * vibAmp + angularVel.x * 14;
+
+        const cx = w * 0.5 + vibX;
+        const bottomY = h + 15 + vibY;
+
+        rigCtx.save();
+
+        if (state.payloadView === 'RPG_WIRE') {
+          const noseTipY = h * 0.69 + vibY;
+
+          const grad = rigCtx.createLinearGradient(cx - 70, noseTipY, cx + 70, bottomY);
+          grad.addColorStop(0, '#3a472e');
+          grad.addColorStop(0.5, '#4f5f3f');
+          grad.addColorStop(1, '#252e1d');
+
+          rigCtx.fillStyle = grad;
+          rigCtx.strokeStyle = '#192014';
+          rigCtx.lineWidth = 2;
+
+          rigCtx.beginPath();
+          rigCtx.moveTo(cx - 18, noseTipY + 18);
+          rigCtx.lineTo(cx + 18, noseTipY + 18);
+          rigCtx.lineTo(cx + 88, bottomY);
+          rigCtx.lineTo(cx - 88, bottomY);
+          rigCtx.closePath();
+          rigCtx.fill();
+          rigCtx.stroke();
+
+          // Metallic piezo fuze tip
+          rigCtx.fillStyle = '#9ca3af';
+          rigCtx.beginPath();
+          rigCtx.moveTo(cx - 9, noseTipY);
+          rigCtx.lineTo(cx + 9, noseTipY);
+          rigCtx.lineTo(cx + 18, noseTipY + 20);
+          rigCtx.lineTo(cx - 18, noseTipY + 20);
+          rigCtx.closePath();
+          rigCtx.fill();
+          rigCtx.stroke();
+
+          rigCtx.fillStyle = '#111827';
+          rigCtx.fillRect(cx - 52, noseTipY + 62, 104, 12);
+        }
+
+        // Copper Whisker Impact Trigger Loop + Front Probe Coil
+        const wireCenterY = h * 0.54 + vibY * 1.3;
+        const compress = drone.whiskerContactCompress;
+
+        rigCtx.strokeStyle = '#b45309';
+        rigCtx.lineWidth = 3.2;
+        rigCtx.beginPath();
+        rigCtx.moveTo(cx - 135, bottomY);
+        rigCtx.quadraticCurveTo(cx - 145, wireCenterY + 30, cx - 75, wireCenterY - 25);
+        rigCtx.stroke();
+
+        rigCtx.strokeStyle = '#d97706';
+        rigCtx.lineWidth = 3;
+        rigCtx.beginPath();
+        rigCtx.ellipse(
+          cx + compress * 6,
+          wireCenterY + compress * 8,
+          68,
+          44,
+          0,
+          0,
+          Math.PI * 2
+        );
+        rigCtx.stroke();
+
+        rigCtx.strokeStyle = '#f59e0b';
+        rigCtx.lineWidth = 2.5;
+        rigCtx.beginPath();
+        rigCtx.moveTo(cx, h * 0.72 + vibY);
+        rigCtx.lineTo(cx - compress * 8, wireCenterY);
+        rigCtx.stroke();
+
+        rigCtx.strokeStyle = '#dc2626';
+        rigCtx.lineWidth = 2.5;
+        rigCtx.beginPath();
+        rigCtx.moveTo(cx - 85, bottomY - 20);
+        rigCtx.bezierCurveTo(cx - 110, h * 0.78, cx - 45, h * 0.70, cx - 12, h * 0.69 + vibY);
+        rigCtx.stroke();
+
+        rigCtx.strokeStyle = '#1f2937';
+        rigCtx.beginPath();
+        rigCtx.moveTo(cx + 85, bottomY - 20);
+        rigCtx.bezierCurveTo(cx + 105, h * 0.78, cx + 45, h * 0.70, cx + 12, h * 0.69 + vibY);
+        rigCtx.stroke();
+
+        if (compress > 0.2) {
+          rigCtx.fillStyle = '#fef08a';
+          rigCtx.beginPath();
+          rigCtx.arc(cx, wireCenterY, 18 * compress, 0, Math.PI * 2);
+          rigCtx.fill();
+        }
+
+        rigCtx.restore();
+      }
+
+      // ==========================================
+      // 7. ANALOG 5.8GHz VTX INTERFERENCE & SNOW NOISE OVERLAY
+      // ==========================================
+      function drawAnalogVtxNoise(staticIntensity) {
+        const nw = noiseCanvas.width;
+        const nh = noiseCanvas.height;
+        noiseCtx.clearRect(0, 0, nw, nh);
+
+        if (state.detonated) {
+          // If a target was destroyed, only flash brief VTX static for 0.22s, then switch to clear 3rd-person BDA orbit camera!
+          if (state.orbitCamActive && state.orbitElapsed > 0.22) {
+            // Subtle recon camera scanlines/interference
+            noiseCtx.fillStyle = 'rgba(220, 255, 230, 0.08)';
+            const ry = (Date.now() * 0.08) % nh;
+            noiseCtx.fillRect(0, ry, nw, 2);
+            return;
+          }
+          const imgData = noiseCtx.createImageData(nw, nh);
+          const buf = imgData.data;
+          for (let i = 0; i < buf.length; i += 4) {
+            const lum = Math.random() * 235;
+            buf[i] = lum;
+            buf[i + 1] = lum + (Math.random() * 15);
+            buf[i + 2] = lum;
+            buf[i + 3] = 235;
+          }
+          noiseCtx.putImageData(imgData, 0, 0);
+
+          const barY = (Date.now() * 0.15) % nh;
+          noiseCtx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+          noiseCtx.fillRect(0, barY, nw, 18);
+          return;
+        }
+
+        const bandCount = Math.floor(2 + staticIntensity * 16);
+        for (let b = 0; b < bandCount; b++) {
+          if (Math.random() > 0.32 + staticIntensity * 0.65) continue;
+          const y = Math.random() * nh;
+          const h = 1 + Math.random() * (2.5 + staticIntensity * 13);
+          const alpha = 0.06 + Math.random() * (0.16 + staticIntensity * 0.42);
+          noiseCtx.fillStyle = `rgba(240, 255, 245, ${alpha})`;
+          noiseCtx.fillRect(0, y, nw, h);
+        }
+
+        const dotCount = Math.floor(28 + staticIntensity * 380);
+        noiseCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        for (let d = 0; d < dotCount; d++) {
+          const dx = Math.random() * nw;
+          const dy = Math.random() * nh;
+          noiseCtx.fillRect(dx, dy, 2 + Math.random() * 4, 1.5);
+        }
+      }
+
+      // ==========================================
+      // 8. JOYSTICK MODES (US MODE 2 vs JP MODE 1) & INPUT HANDLING
+      // ==========================================
+      const leftStickPad = document.getElementById('leftStickPad');
+      const rightStickPad = document.getElementById('rightStickPad');
+      const leftStickKnob = document.getElementById('leftStickKnob');
+      const rightStickKnob = document.getElementById('rightStickKnob');
+      const leftStickTitle = document.getElementById('leftStickTitle');
+      const rightStickTitle = document.getElementById('rightStickTitle');
+      const leftStickAxisLabels = document.getElementById('leftStickAxisLabels');
+      const rightStickAxisLabels = document.getElementById('rightStickAxisLabels');
+
+      function updateStickModeUI() {
+        const stickModeBtnText = document.getElementById('stickModeBtnText');
+        if (state.stickMode === 'US') {
+          stickModeBtnText.textContent = '美國手 (Mode 2)';
+          leftStickTitle.textContent = '美國手 Mode 2';
+          rightStickTitle.textContent = '左搖桿：油門升降(不回中) + 偏航 / 右搖桿：俯仰 + 橫滾';
+          leftStickAxisLabels.innerHTML = `
+            <span>THR+</span>
+            <div class="w-full flex justify-between px-1"><span>YAW-</span><span>YAW+</span></div>
+            <span>THR-</span>
+          `;
+          rightStickAxisLabels.innerHTML = `
+            <span>PITCH↓</span>
+            <div class="w-full flex justify-between px-1"><span>ROLL-</span><span>ROLL+</span></div>
+            <span>PITCH↑</span>
+          `;
+          state.leftStick.y = state.throttle * 2 - 1;
+          state.rightStick.y = 0;
+        } else {
+          stickModeBtnText.textContent = '日本手 (Mode 1)';
+          leftStickTitle.textContent = '日本手 Mode 1';
+          rightStickTitle.textContent = '左搖桿：俯仰 + 偏航 / 右搖桿：油門升降(不回中) + 橫滾';
+          leftStickAxisLabels.innerHTML = `
+            <span>PITCH↓</span>
+            <div class="w-full flex justify-between px-1"><span>YAW-</span><span>YAW+</span></div>
+            <span>PITCH↑</span>
+          `;
+          rightStickAxisLabels.innerHTML = `
+            <span>THR+</span>
+            <div class="w-full flex justify-between px-1"><span>ROLL-</span><span>ROLL+</span></div>
+            <span>THR-</span>
+          `;
+          state.rightStick.y = state.throttle * 2 - 1;
+          state.leftStick.y = 0;
+        }
+        updateOsdModeBanner();
+      }
+
+      function bindVirtualStick(padEl, stickObj, isLeft) {
+        function updateFromClientPos(clientX, clientY) {
+          const rect = padEl.getBoundingClientRect();
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          const maxR = rect.width * 0.40;
+          const dx = Math.max(-maxR, Math.min(maxR, clientX - cx));
+          const dy = Math.max(-maxR, Math.min(maxR, clientY - cy));
+          stickObj.x = dx / maxR;
+          stickObj.y = -dy / maxR;
+        }
+
+        padEl.addEventListener('pointerdown', (e) => {
+          initAudio();
+          stickObj.active = true;
+          stickObj.pointerId = e.pointerId;
+          padEl.setPointerCapture(e.pointerId);
+          updateFromClientPos(e.clientX, e.clientY);
+        });
+
+        padEl.addEventListener('pointermove', (e) => {
+          if (!stickObj.active || e.pointerId !== stickObj.pointerId) return;
+          updateFromClientPos(e.clientX, e.clientY);
+        });
+
+        function releaseStick(e) {
+          if (!stickObj.active || (e.pointerId !== undefined && e.pointerId !== stickObj.pointerId)) return;
+          stickObj.active = false;
+          stickObj.pointerId = null;
+          stickObj.x = 0;
+          const isThrottleAxis = (state.stickMode === 'US' && isLeft) || (state.stickMode === 'JP' && !isLeft);
+          if (!isThrottleAxis) {
+            stickObj.y = 0;
+          }
+        }
+
+        padEl.addEventListener('pointerup', releaseStick);
+        padEl.addEventListener('pointercancel', releaseStick);
+      }
+
+      bindVirtualStick(leftStickPad, state.leftStick, true);
+      bindVirtualStick(rightStickPad, state.rightStick, false);
+
+      function enterBattlefield() {
+        initAudio();
+        state.inBattlefield = true;
+        document.getElementById('startScreenModal').classList.add('hidden');
+        document.getElementById('startScreenModal').classList.remove('flex');
+        document.getElementById('osdLayer').classList.remove('hidden');
+        document.getElementById('osdLayer').classList.add('flex');
+      }
+
+      function openStartMenu() {
+        state.inBattlefield = false;
+        document.getElementById('detonationBanner').classList.add('hidden');
+        document.getElementById('detonationBanner').classList.remove('flex');
+        document.getElementById('osdLayer').classList.add('hidden');
+        document.getElementById('osdLayer').classList.remove('flex');
+        document.getElementById('startScreenModal').classList.remove('hidden');
+        document.getElementById('startScreenModal').classList.add('flex');
+      }
+
+      window.addEventListener('keydown', (e) => {
+        initAudio();
+        const code = e.code;
+        state.keys[code] = true;
+
+        if (code === 'Escape') {
+          const helpModal = document.getElementById('helpModal');
+          if (!helpModal.classList.contains('hidden')) {
+            helpModal.classList.add('hidden');
+            helpModal.classList.remove('flex');
+          } else if (state.inBattlefield) {
+            openStartMenu();
+          }
+          return;
+        }
+
+        if (!state.inBattlefield) return;
+
+        if (code === 'Space') {
+          e.preventDefault();
+          if (!state.detonated) {
+            triggerDetonation('手動引爆 (操作員指令)', drone.pos.clone());
+          }
+        } else if (code === 'KeyR') {
+          e.preventDefault();
+          respawnDrone();
+        }
+      });
+
+      window.addEventListener('keyup', (e) => {
+        state.keys[e.code] = false;
+      });
+
+      function stepControls(dt) {
+        if (!state.inBattlefield) return;
+
+        const lVertKey = (state.keys['KeyW'] ? 1 : 0) - (state.keys['KeyS'] ? 1 : 0);
+        const lHorzKey = (state.keys['KeyD'] ? 1 : 0) - (state.keys['KeyA'] ? 1 : 0);
+        const rVertKey = (state.keys['ArrowUp'] ? 1 : 0) - (state.keys['ArrowDown'] ? 1 : 0);
+        const rHorzKey = (state.keys['ArrowRight'] ? 1 : 0) - (state.keys['ArrowLeft'] ? 1 : 0);
+
+        if (state.stickMode === 'US') {
+          if (!state.leftStick.active) {
+            if (lVertKey !== 0) {
+              state.leftStick.y = Math.max(-1, Math.min(1, state.leftStick.y + lVertKey * dt * 1.15));
+            }
+            state.leftStick.x = lHorzKey * 0.78;
+          }
+          if (!state.rightStick.active) {
+            state.rightStick.y = rVertKey * 0.82;
+            state.rightStick.x = rHorzKey * 0.82;
+          }
+
+          state.throttle = (state.leftStick.y + 1) * 0.5;
+          state.yaw = state.leftStick.x;
+          state.pitch = state.rightStick.y;
+          state.roll = state.rightStick.x;
+        } else {
+          if (!state.leftStick.active) {
+            state.leftStick.y = lVertKey * 0.82;
+            state.leftStick.x = lHorzKey * 0.78;
+          }
+          if (!state.rightStick.active) {
+            if (rVertKey !== 0) {
+              state.rightStick.y = Math.max(-1, Math.min(1, state.rightStick.y + rVertKey * dt * 1.15));
+            }
+            state.rightStick.x = rHorzKey * 0.82;
+          }
+
+          state.pitch = state.leftStick.y;
+          state.yaw = state.leftStick.x;
+          state.throttle = (state.rightStick.y + 1) * 0.5;
+          state.roll = state.rightStick.x;
+        }
+
+        const lxPct = 50 + state.leftStick.x * 38;
+        const lyPct = 50 - state.leftStick.y * 38;
+        const rxPct = 50 + state.rightStick.x * 38;
+        const ryPct = 50 - state.rightStick.y * 38;
+
+        leftStickKnob.style.left = `${lxPct}%`;
+        leftStickKnob.style.top = `${lyPct}%`;
+        rightStickKnob.style.left = `${rxPct}%`;
+        rightStickKnob.style.top = `${ryPct}%`;
+
+        const lRod = document.getElementById('leftStickRod');
+        const lRodHi = document.getElementById('leftStickRodHighlight');
+        if (lRod && lRodHi) {
+          lRod.setAttribute('x2', lxPct);
+          lRod.setAttribute('y2', lyPct);
+          lRodHi.setAttribute('x2', lxPct);
+          lRodHi.setAttribute('y2', lyPct);
+        }
+        const rRod = document.getElementById('rightStickRod');
+        const rRodHi = document.getElementById('rightStickRodHighlight');
+        if (rRod && rRodHi) {
+          rRod.setAttribute('x2', rxPct);
+          rRod.setAttribute('y2', ryPct);
+          rRodHi.setAttribute('x2', rxPct);
+          rRodHi.setAttribute('y2', ryPct);
+        }
+      }
+
+      // ==========================================
+      // 9. GROUND LAUNCH PAD & 6-DOF QUADCOPTER PHYSICS
+      // ==========================================
+      function expoCurve(val, expo) {
+        return val * (1 - expo) + (val * val * val) * expo;
+      }
+
+      function respawnDrone() {
+        state.detonated = false;
+        state.orbitCamActive = false;
+        state.orbitElapsed = 0;
+        state.onLaunchPad = true;
+        state.flightTimeSec = 0;
+        state.batteryVolts = 25.2;
+        state.mahUsed = 0;
+        state.amps = 0.8;
+        drone.whiskerContactCompress = 0;
+
+        // Place drone stationary on the ground launch stand at (0, 0.75, 235)
+        drone.pos.copy(LAUNCH_PAD_POS);
+        drone.vel.set(0, 0, 0);
+        drone.quat.identity();
+        drone.angVel.set(0, 0, 0);
+
+        // Zero throttle on ground pad so user manually takes off
+        state.throttle = 0.0;
+        state.pitch = 0;
+        state.roll = 0;
+        state.yaw = 0;
+        if (state.stickMode === 'US') {
+          state.leftStick.x = 0;
+          state.leftStick.y = -1.0;
+          state.rightStick.x = 0;
+          state.rightStick.y = 0;
+        } else {
+          state.rightStick.x = 0;
+          state.rightStick.y = -1.0;
+          state.leftStick.x = 0;
+          state.leftStick.y = 0;
+        }
+
+        // Update camera to sit on launch pad looking North down the road
+        camera.position.copy(drone.pos);
+        const tiltQuat = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(1, 0, 0),
+          THREE.MathUtils.degToRad(state.cameraTiltDeg)
+        );
+        camera.quaternion.copy(drone.quat).multiply(tiltQuat);
+
+        state.missionFeedText = 'GROUND PAD READY // 推高油門起飛 (ESC: 選單)';
+        document.getElementById('detonationBanner').classList.add('hidden');
+        document.getElementById('detonationBanner').classList.remove('flex');
+      }
+
+      function triggerDetonation(reasonText, impactPos, preKilledCount, preKilledNames, orbitFocusPos) {
+        if (state.detonated) return;
+        state.detonated = true;
+        drone.whiskerContactCompress = 1.0;
+        playExplosionSound();
+
+        let killsThisBlast = preKilledCount || 0;
+        const hitNames = preKilledNames ? preKilledNames.slice() : [];
+        let focusTargetPos = orbitFocusPos ? orbitFocusPos.clone() : impactPos.clone();
+
+        targets.forEach((t) => {
+          if (!t.destroyed) {
+            const d = t.pos.distanceTo(impactPos);
+            if (d <= t.hitRadius + 10.5) {
+              markTargetDestroyed(t);
+              killsThisBlast++;
+              hitNames.push(t.name);
+              focusTargetPos.copy(t.pos);
+            }
+          }
+        });
+
+        spawnExplosionEffect(impactPos, killsThisBlast > 0);
+
+        const impactKmh = Math.round(drone.vel.length() * 3.6);
+        const subHeaderEl = document.getElementById('detonationSubHeader');
+        const headlineEl = document.getElementById('detonationHeadline');
+        const detailEl = document.getElementById('detonationDetail');
+
+        if (killsThisBlast > 0) {
+          // Activate 3rd-Person BDA Orbit Camera around the destroyed target explosion!
+          state.orbitCamActive = true;
+          state.orbitCenter.copy(focusTargetPos);
+          state.orbitElapsed = 0;
+          state.orbitAngle = Math.atan2(
+            drone.pos.z - focusTargetPos.z,
+            drone.pos.x - focusTargetPos.x
+          );
+          subHeaderEl.textContent = 'RECON UAV // 3RD-PERSON BDA ORBIT CAM';
+          subHeaderEl.className = 'text-xs tracking-widest text-emerald-400 font-bold mb-1';
+          headlineEl.textContent = `目標摧毀！擊毀 ${killsThisBlast} 個單位`;
+          detailEl.textContent = `第三人稱戰果環繞觀測中 — 命中: ${hitNames.join('、')}`;
+          state.missionFeedText = `戰果確認 // 第三人稱環繞觀測: ${hitNames[0]}`;
+        } else {
+          state.orbitCamActive = false;
+          subHeaderEl.textContent = '5.8GHz VTX CARRIER LOST';
+          subHeaderEl.className = 'text-xs tracking-widest text-red-400 font-bold mb-1';
+          headlineEl.textContent = '訊號中斷 // 彈頭引爆';
+          detailEl.textContent = `${reasonText} (未命中敵方目標)`;
+        }
+
+        document.getElementById('statImpactSpeed').textContent = `${impactKmh} km/h`;
+        document.getElementById('statKillsRun').textContent = `${killsThisBlast} 目標`;
+        document.getElementById('statImpactCoords').textContent =
+          `X:${Math.round(impactPos.x)} Z:${Math.round(impactPos.z)}`;
+        const remaining = targets.filter((t) => !t.destroyed).length;
+        document.getElementById('statRemainingTargets').textContent = `${remaining} 目標`;
+
+        const banner = document.getElementById('detonationBanner');
+        if (killsThisBlast > 0) {
+          // Hide menu for the first 5 seconds so the player gets a pure, unobstructed 3rd-person explosion orbit view
+          banner.classList.add('hidden');
+          banner.classList.remove('flex');
+        } else {
+          banner.classList.remove('hidden');
+          banner.classList.add('flex');
+        }
+      }
+
+      function stepPhysics(dt) {
+        // Always animate moving targets & smoke even while previewing from launch pad
+        targets.forEach((t) => {
+          if (t.destroyed || t.speed <= 0) return;
+          const forwardZ = Math.cos(t.heading);
+          const forwardX = Math.sin(t.heading);
+          t.pos.x += forwardX * t.speed * t.patrolDir * dt;
+          t.pos.z += forwardZ * t.speed * t.patrolDir * dt;
+          t.pos.y = getTerrainHeight(t.pos.x, t.pos.z);
+
+          const distFromSpawn = Math.hypot(t.pos.x - t.baseX, t.pos.z - t.baseZ);
+          if (distFromSpawn > t.patrolRange) {
+            t.patrolDir *= -1;
+            t.mesh.rotation.y = t.heading + (t.patrolDir < 0 ? Math.PI : 0);
+          }
+        });
+
+        if (!state.inBattlefield || state.detonated) return;
+
+        // Check if drone is still resting on the Ground Launch Pad
+        if (state.onLaunchPad) {
+          drone.pos.copy(LAUNCH_PAD_POS);
+          drone.vel.set(0, 0, 0);
+          drone.angVel.set(0, 0, 0);
+          drone.quat.identity();
+
+          // Apply camera tilt while sitting on pad
+          camera.position.copy(drone.pos);
+          const tiltQuat = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(1, 0, 0),
+            THREE.MathUtils.degToRad(state.cameraTiltDeg)
+          );
+          camera.quaternion.copy(drone.quat).multiply(tiltQuat);
+
+          // Lift off from launch stand once armed and throttle exceeds hover threshold (~32%)
+          if (state.armed && state.throttle > 0.32) {
+            state.onLaunchPad = false;
+            drone.vel.set(0, 1.4, -1.5);
+            state.missionFeedText = 'AIRBORNE // 已離地升空，搜尋前方裝甲目標';
+          } else {
+            return;
+          }
+        }
+
+        state.flightTimeSec += dt;
+
+        // Angular dynamics (ACRO vs ANGLE mode)
+        const pitchIn = expoCurve(state.pitch, 0.35);
+        const rollIn = expoCurve(state.roll, 0.35);
+        const yawIn = expoCurve(state.yaw, 0.25);
+
+        if (state.flightMode === 'ACRO') {
+          const maxPitchRollRate = 3.5;
+          const maxYawRate = 2.5;
+          const targetPitchRate = -pitchIn * maxPitchRollRate;
+          const targetRollRate = -rollIn * maxPitchRollRate;
+          const targetYawRate = -yawIn * maxYawRate;
+
+          drone.angVel.x += (targetPitchRate - drone.angVel.x) * Math.min(1, dt * 14);
+          drone.angVel.z += (targetRollRate - drone.angVel.z) * Math.min(1, dt * 14);
+          drone.angVel.y += (targetYawRate - drone.angVel.y) * Math.min(1, dt * 11);
+
+          const dq = new THREE.Quaternion();
+          const eulDelta = new THREE.Euler(
+            drone.angVel.x * dt,
+            drone.angVel.y * dt,
+            drone.angVel.z * dt,
+            'YXZ'
+          );
+          dq.setFromEuler(eulDelta);
+          drone.quat.multiply(dq);
+          drone.quat.normalize();
+        } else {
+          const currentEuler = new THREE.Euler().setFromQuaternion(drone.quat, 'YXZ');
+          const maxTilt = 0.84;
+          const targetPitchAngle = -pitchIn * maxTilt;
+          const targetRollAngle = -rollIn * maxTilt;
+          const yawRate = -yawIn * 2.2;
+
+          const newPitch = currentEuler.x + (targetPitchAngle - currentEuler.x) * Math.min(1, dt * 8);
+          const newRoll = currentEuler.z + (targetRollAngle - currentEuler.z) * Math.min(1, dt * 8);
+          const newYaw = currentEuler.y + yawRate * dt;
+
+          drone.angVel.set(
+            (newPitch - currentEuler.x) / Math.max(0.001, dt),
+            yawRate,
+            (newRoll - currentEuler.z) / Math.max(0.001, dt)
+          );
+          drone.quat.setFromEuler(new THREE.Euler(newPitch, newYaw, newRoll, 'YXZ'));
+        }
+
+        // Linear forces
+        const gravity = new THREE.Vector3(0, -9.81 * drone.mass, 0);
+        const bodyUp = new THREE.Vector3(0, 1, 0).applyQuaternion(drone.quat);
+        const thrustMag = state.armed ? (state.throttle * drone.maxThrust) : 0;
+        const thrustForce = bodyUp.multiplyScalar(thrustMag);
+
+        const speed = drone.vel.length();
+        const dragForce = drone.vel.clone().multiplyScalar(-drone.dragCoeff * (3.5 + speed * 0.25));
+
+        const totalForce = new THREE.Vector3()
+          .add(gravity)
+          .add(thrustForce)
+          .add(dragForce);
+
+        const accel = totalForce.divideScalar(drone.mass);
+        drone.vel.addScaledVector(accel, dt);
+        drone.pos.addScaledVector(drone.vel, dt);
+
+        // Update FPV Camera
+        camera.position.copy(drone.pos);
+        const tiltQuat = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(1, 0, 0),
+          THREE.MathUtils.degToRad(state.cameraTiltDeg)
+        );
+        camera.quaternion.copy(drone.quat).multiply(tiltQuat);
+
+        // Battery sag & telemetry
+        state.amps = 2.5 + Math.pow(state.throttle, 1.7) * 68;
+        state.mahUsed += (state.amps * 1000 / 3600) * dt;
+        const sag = state.throttle * 1.15;
+        state.batteryVolts = Math.max(19.8, 25.2 - (state.mahUsed / 1800) * 3.6 - sag);
+
+        // Proximity & Impact check
+        let minTargetDist = Infinity;
+        let closestTarget = null;
+        drone.whiskerContactCompress = 0;
+
+        for (let i = 0; i < targets.length; i++) {
+          const t = targets[i];
+          if (t.destroyed) continue;
+          const dx = drone.pos.x - t.pos.x;
+          const dz = drone.pos.z - t.pos.z;
+          const dy = drone.pos.y - (t.pos.y + t.hitHeight * 0.5);
+          const horizDist = Math.hypot(dx, dz);
+          const dist3D = Math.hypot(dx, dy, dz);
+
+          if (dist3D < minTargetDist) {
+            minTargetDist = dist3D;
+            closestTarget = t;
+          }
+
+          if (horizDist < t.hitRadius + 2.2 && drone.pos.y <= t.pos.y + t.hitHeight + 1.2) {
+            drone.whiskerContactCompress = Math.max(0.25, 1 - (horizDist / (t.hitRadius + 2.2)));
+          }
+
+          if (horizDist <= t.hitRadius && drone.pos.y >= t.pos.y - 0.5 && drone.pos.y <= t.pos.y + t.hitHeight + 0.4) {
+            if (state.armed) {
+              markTargetDestroyed(t);
+              triggerDetonation(`銅線觸發器短路 // 直接命中 ${t.name}`, drone.pos.clone(), 1, [t.name], t.pos.clone());
+              return;
+            } else {
+              drone.vel.multiplyScalar(-0.4);
+              drone.pos.y += 1.2;
+            }
+          }
+        }
+
+        if (closestTarget) {
+          state.nearestTargetText = `TGT: ${closestTarget.name} [${Math.round(minTargetDist)}m]`;
+        } else {
+          state.nearestTargetText = 'ALL TARGETS DESTROYED // 目標全數肅清';
+        }
+
+        // Ground collision check (only after leaving launch pad and flying > 0.8s)
+        const groundY = getTerrainHeight(drone.pos.x, drone.pos.z);
+        const agl = drone.pos.y - groundY;
+        if (agl <= 0.35 && state.flightTimeSec > 0.8) {
+          if (state.armed && (drone.vel.length() > 5.0 || Math.abs(state.pitch) > 0.3)) {
+            triggerDetonation('觸地引爆 (撞擊地表)', drone.pos.clone());
+            return;
+          } else {
+            drone.pos.y = groundY + 0.35;
+            if (drone.vel.y < 0) drone.vel.y = 0;
+            drone.vel.x *= 0.85;
+            drone.vel.z *= 0.85;
+          }
+        }
+      }
+
+      // ==========================================
+      // 10. UPDATE OSD & MENU BADGES
+      // ==========================================
+      function updateTopBarBadges() {
+        document.getElementById('osdScoreBadge').textContent =
+          `KILLS: ${state.destroyedCount}/${state.totalTargets}`;
+        document.getElementById('menuScoreBadge').textContent =
+          `目前戰果: ${state.destroyedCount} / ${state.totalTargets} 擊毀`;
+      }
+
+      function updateOsdModeBanner() {
+        const modeLabel = state.stickMode === 'US' ? 'MODE 2 (美國手)' : 'MODE 1 (日本手)';
+        const armLabel = state.armed ? 'ARMED' : 'SAFE';
+        const padLabel = state.onLaunchPad ? ' // PAD STANDBY' : '';
+        document.getElementById('osdCraftMode').textContent =
+          `[${state.flightMode}] ${armLabel} // ${modeLabel}${padLabel}`;
+      }
+
+      function updateOsdTelemetry(dt) {
+        for (let i = debrisParticles.length - 1; i >= 0; i--) {
+          const p = debrisParticles[i];
+          p.life -= dt;
+          if (p.life <= 0) {
+            scene.remove(p.mesh);
+            debrisParticles.splice(i, 1);
+          } else {
+            p.vel.y -= 9.8 * dt;
+            p.mesh.position.addScaledVector(p.vel, dt);
+            const gy = getTerrainHeight(p.mesh.position.x, p.mesh.position.z);
+            if (p.mesh.position.y < gy + 0.25) {
+              p.mesh.position.y = gy + 0.25;
+              p.vel.y *= -0.35;
+              p.vel.x *= 0.7;
+              p.vel.z *= 0.7;
+            }
+            p.mesh.rotation.x += 4 * dt;
+            p.mesh.rotation.y += 3 * dt;
+          }
+        }
+
+        for (let i = shockwaves.length - 1; i >= 0; i--) {
+          const sw = shockwaves[i];
+          sw.age += dt;
+          const prog = sw.age / sw.maxAge;
+          if (prog >= 1) {
+            scene.remove(sw.fireball);
+            scene.remove(sw.ring);
+            shockwaves.splice(i, 1);
+          } else {
+            const fbScale = 1 + prog * 4.5;
+            sw.fireball.scale.set(fbScale, fbScale, fbScale);
+            sw.fireball.material.opacity = Math.max(0, (1 - prog) * 0.9);
+            const ringScale = 1 + prog * 9.5;
+            sw.ring.scale.set(ringScale, ringScale, 1);
+            sw.ring.material.opacity = Math.max(0, (1 - prog) * 0.85);
+          }
+        }
+
+        // 3rd-Person Orbit Camera around the explosion site when a target is destroyed
+        if (state.detonated && state.orbitCamActive) {
+          state.orbitElapsed += dt;
+          state.orbitAngle += dt * 0.68; // Smooth cinematic 360-degree orbit
+          const radius = 19 + Math.sin(state.orbitElapsed * 0.5) * 3.0;
+          const camHeight = 9.5 + Math.sin(state.orbitElapsed * 0.35) * 2.0;
+          const cx = state.orbitCenter.x + Math.cos(state.orbitAngle) * radius;
+          const cz = state.orbitCenter.z + Math.sin(state.orbitAngle) * radius;
+          const cy = Math.max(getTerrainHeight(cx, cz) + 2.5, state.orbitCenter.y + camHeight);
+          camera.position.set(cx, cy, cz);
+          camera.lookAt(
+            state.orbitCenter.x,
+            state.orbitCenter.y + 1.8,
+            state.orbitCenter.z
+          );
+
+          // Show the post-action menu only after 5 full seconds of explosion orbit viewing
+          const banner = document.getElementById('detonationBanner');
+          if (state.orbitElapsed >= 5.0 && banner.classList.contains('hidden')) {
+            banner.classList.remove('hidden');
+            banner.classList.add('flex');
+          }
+        }
+
+        smokeColumns.forEach((s) => {
+          s.phase += dt * 1.5;
+          s.mesh.rotation.y = Math.sin(s.phase * 0.4) * 0.25;
+        });
+
+        const cellV = (state.batteryVolts / 6).toFixed(2);
+        document.getElementById('osdBatteryCell').textContent =
+          `${state.batteryVolts.toFixed(1)}V (${cellV}V)`;
+        document.getElementById('osdAmps').textContent = `${state.amps.toFixed(1)}A`;
+        document.getElementById('osdMah').textContent =
+          `${String(Math.round(state.mahUsed)).padStart(4, '0')}mAh`;
+
+        const groundY = getTerrainHeight(drone.pos.x, drone.pos.z);
+        const agl = Math.max(0, drone.pos.y - groundY);
+        const speedKmh = Math.round(drone.vel.length() * 3.6);
+        const homeDist = Math.round(Math.hypot(drone.pos.x - LAUNCH_PAD_POS.x, drone.pos.z - LAUNCH_PAD_POS.z));
+
+        document.getElementById('osdAlt').textContent = `ALT: ${agl.toFixed(1).padStart(5, '0')} m`;
+        document.getElementById('osdSpeed').textContent = `SPD: ${String(speedKmh).padStart(3, '0')} km/h`;
+        document.getElementById('osdDist').textContent = `HOME: ${String(homeDist).padStart(3, '0')} m`;
+        document.getElementById('osdThrottlePct').textContent =
+          `THR: ${String(Math.round(state.throttle * 100)).padStart(2, '0')}%`;
+
+        document.getElementById('osdTargetLock').textContent = state.nearestTargetText;
+        document.getElementById('osdMissionFeed').textContent = state.missionFeedText;
+        updateOsdModeBanner();
+
+        const mins = String(Math.floor(state.flightTimeSec / 60)).padStart(2, '0');
+        const secs = String(Math.floor(state.flightTimeSec % 60)).padStart(2, '0');
+        document.getElementById('osdTimer').textContent =
+          `${mins}:${secs} // [SPACE] 引爆  [R] 新機  [ESC] 選單`;
+
+        const eul = new THREE.Euler().setFromQuaternion(drone.quat, 'YXZ');
+        let headingDeg = Math.round((-THREE.MathUtils.radToDeg(eul.y) % 360 + 360) % 360);
+        const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+        const dirStr = dirs[Math.round(headingDeg / 45) % 8];
+        document.getElementById('osdCompass').textContent =
+          `--- [ ${dirStr} ${String(headingDeg).padStart(3, '0')}° ] ---`;
+
+        const rollDeg = THREE.MathUtils.radToDeg(eul.z);
+        const pitchPx = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(eul.x) * 1.4, -45, 45);
+        const horizonBar = document.getElementById('osdHorizonBar');
+        horizonBar.style.transform = `translateY(${pitchPx}px) rotate(${rollDeg}deg)`;
+
+        const lowAltFactor = (!state.onLaunchPad && agl < 3.5) ? (3.5 - agl) / 3.5 : 0;
+        const distFactor = Math.min(1, homeDist / 650);
+        const staticIntensity = Math.min(0.92, 0.04 + lowAltFactor * 0.5 + distFactor * 0.35 + drone.whiskerContactCompress * 0.5);
+
+        state.rssi = Math.max(12, Math.round(99 - staticIntensity * 70));
+        state.lq = Math.max(20, Math.round(100 - staticIntensity * 52));
+        document.getElementById('osdRssi').textContent = `RSSI: ${state.rssi}%`;
+        document.getElementById('osdLinkQuality').textContent = `LQ: 9:${state.lq}`;
+
+        const warnEl = document.getElementById('osdCenterWarning');
+        if (state.onLaunchPad && !state.detonated) {
+          warnEl.textContent = '** ON LAUNCH PAD // 推高油門搖桿起飛 **';
+          warnEl.classList.remove('hidden', 'blink-alert');
+        } else if (agl < 2.8 && !state.detonated) {
+          warnEl.textContent = '** LOW ALTITUDE // PULL UP **';
+          warnEl.classList.remove('hidden');
+          warnEl.classList.add('blink-alert');
+        } else if (drone.whiskerContactCompress > 0.2 && !state.detonated) {
+          warnEl.textContent = '** TERMINAL IMPACT **';
+          warnEl.classList.remove('hidden');
+          warnEl.classList.add('blink-alert');
+        } else {
+          warnEl.classList.add('hidden');
+          warnEl.classList.remove('blink-alert');
+        }
+
+        drawFpvNoseRig(state.flightTimeSec, drone.angVel);
+        drawAnalogVtxNoise(staticIntensity);
+        updateAudio(dt, drone.vel.length(), staticIntensity);
+      }
+
+      // ==========================================
+      // 11. START SCREEN & MODAL EVENT LISTENERS
+      // ==========================================
+      document.getElementById('btnLaunchBattlefield').addEventListener('click', () => {
+        enterBattlefield();
+      });
+
+      document.getElementById('btnStickMode').addEventListener('click', () => {
+        initAudio();
+        state.stickMode = state.stickMode === 'US' ? 'JP' : 'US';
+        updateStickModeUI();
+      });
+
+      document.getElementById('btnFlightMode').addEventListener('click', () => {
+        initAudio();
+        state.flightMode = state.flightMode === 'ACRO' ? 'ANGLE' : 'ACRO';
+        const txt = document.getElementById('flightModeBtnText');
+        const desc = document.getElementById('flightModeDesc');
+        if (state.flightMode === 'ACRO') {
+          txt.textContent = 'ACRO (手動特技模式)';
+          desc.textContent = '鬆開搖桿時機身保持傾角不自動回平，適合高速俯衝與鑽窗攻擊。';
+        } else {
+          txt.textContent = 'ANGLE (水平自穩模式)';
+          desc.textContent = '鬆開俯仰/橫滾搖桿時自動恢復水平，適合穩定飛行與精準瞄準。';
+        }
+        updateOsdModeBanner();
+      });
+
+      document.getElementById('btnPayloadView').addEventListener('click', () => {
+        initAudio();
+        const order = ['RPG_WIRE', 'WIRE_ONLY', 'CLEAN'];
+        const labels = {
+          RPG_WIRE: 'PG-7V RPG 彈頭 + 觸發銅線',
+          WIRE_ONLY: '僅顯示前端觸發銅線',
+          CLEAN: '隱藏機頭掛載 (全淨空)'
+        };
+        const nextIdx = (order.indexOf(state.payloadView) + 1) % order.length;
+        state.payloadView = order[nextIdx];
+        document.getElementById('payloadViewBtnText').textContent = labels[state.payloadView];
+      });
+
+      function setCamTilt(deg) {
+        state.cameraTiltDeg = deg;
+        document.getElementById('btnCamTilt').textContent = `仰角: ${deg}°`;
+        if (state.onLaunchPad) {
+          const tiltQuat = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(1, 0, 0),
+            THREE.MathUtils.degToRad(state.cameraTiltDeg)
+          );
+          camera.quaternion.copy(drone.quat).multiply(tiltQuat);
+        }
+      }
+
+      document.getElementById('btnCamTilt').addEventListener('click', () => {
+        initAudio();
+        const tilts = [10, 20, 30, 40];
+        const nextTilt = tilts[(tilts.indexOf(state.cameraTiltDeg) + 1) % tilts.length] || 20;
+        setCamTilt(nextTilt);
+      });
+
+      document.getElementById('btnCamPresetLow').addEventListener('click', () => {
+        initAudio();
+        setCamTilt(15);
+      });
+
+      document.getElementById('btnCamPresetDive').addEventListener('click', () => {
+        initAudio();
+        setCamTilt(35);
+      });
+
+      document.getElementById('btnNightThermal').addEventListener('click', () => {
+        initAudio();
+        state.colorMode = state.colorMode === 'COLOR' ? 'MONO' : 'COLOR';
+        const btn = document.getElementById('btnNightThermal');
+        if (state.colorMode === 'MONO') {
+          simCanvas.style.filter = 'grayscale(100%) contrast(135%) sepia(35%) hue-rotate(65deg)';
+          btn.textContent = '色彩: 夜視綠磷類比';
+        } else {
+          simCanvas.style.filter = 'contrast(118%) saturate(85%)';
+          btn.textContent = '色彩: 彩色類比';
+        }
+      });
+      simCanvas.style.filter = 'contrast(118%) saturate(85%)';
+
+      document.getElementById('btnArmToggle').addEventListener('click', () => {
+        initAudio();
+        state.armed = !state.armed;
+        const btn = document.getElementById('btnArmToggle');
+        if (state.armed) {
+          btn.textContent = '引信: ARMED (備炸)';
+          btn.className = 'py-2 px-2.5 rounded-lg bg-red-900/80 hover:bg-red-800 border border-red-400/60 text-red-100 text-xs font-bold transition';
+        } else {
+          btn.textContent = '引信: SAFE (安全保險)';
+          btn.className = 'py-2 px-2.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 border border-zinc-400/50 text-zinc-200 text-xs font-bold transition';
+        }
+        updateOsdModeBanner();
+      });
+
+      document.getElementById('btnDetonateNow').addEventListener('click', () => {
+        initAudio();
+        if (!state.detonated) {
+          triggerDetonation('手動引爆 (操作員指令)', drone.pos.clone());
+        }
+      });
+
+      document.getElementById('btnRespawn').addEventListener('click', () => {
+        initAudio();
+        respawnDrone();
+      });
+
+      document.getElementById('btnBannerRespawn').addEventListener('click', () => {
+        initAudio();
+        respawnDrone();
+      });
+
+      document.getElementById('btnBannerBackMenu').addEventListener('click', () => {
+        initAudio();
+        respawnDrone();
+        openStartMenu();
+      });
+
+      document.getElementById('btnResetBattlefield').addEventListener('click', () => {
+        initAudio();
+        spawnBattlefieldTargets();
+        respawnDrone();
+      });
+
+      document.getElementById('btnBannerResetAll').addEventListener('click', () => {
+        initAudio();
+        spawnBattlefieldTargets();
+        respawnDrone();
+      });
+
+      document.getElementById('btnAudioToggle').addEventListener('click', () => {
+        initAudio();
+        state.audioEnabled = !state.audioEnabled;
+        document.getElementById('btnAudioToggle').textContent =
+          state.audioEnabled ? '音效: 開啟' : '音效: 靜音';
+      });
+
+      const helpModal = document.getElementById('helpModal');
+      document.getElementById('btnHelpModal').addEventListener('click', () => {
+        helpModal.classList.remove('hidden');
+        helpModal.classList.add('flex');
+      });
+      document.getElementById('btnCloseHelp').addEventListener('click', () => {
+        helpModal.classList.add('hidden');
+        helpModal.classList.remove('flex');
+      });
+      document.getElementById('btnConfirmHelp').addEventListener('click', () => {
+        initAudio();
+        helpModal.classList.add('hidden');
+        helpModal.classList.remove('flex');
+      });
+
+      // ==========================================
+      // 12. RESIZE & MAIN ANIMATION LOOP
+      // ==========================================
+      function handleResize() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+
+        fpvRigCanvas.width = w;
+        fpvRigCanvas.height = h;
+        noiseCanvas.width = Math.max(240, Math.floor(w * 0.35));
+        noiseCanvas.height = Math.max(160, Math.floor(h * 0.35));
+      }
+
+      window.addEventListener('resize', handleResize);
+
+      let lastTime = performance.now();
+      function animate(now) {
+        requestAnimationFrame(animate);
+        const dt = Math.min(0.05, (now - lastTime) / 1000);
+        lastTime = now;
+
+        stepControls(dt);
+        stepPhysics(dt);
+        renderer.render(scene, camera);
+        updateOsdTelemetry(dt);
+      }
+
+      window.onload = function () {
+        handleResize();
+        spawnBattlefieldTargets();
+        respawnDrone();
+        updateStickModeUI();
+        requestAnimationFrame(animate);
+      };
+    })();
+  </script>
+</body>
+</html>
